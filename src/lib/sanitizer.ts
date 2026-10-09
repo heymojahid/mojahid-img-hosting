@@ -70,7 +70,7 @@ export function generateUploadPath(
   };
 }
 
-const ALLOWED_EXT_PATTERN = 'png|jpg|jpeg|webp|gif|apk|aab|pdf|plp|zip|rar|7z|tar|gz|doc|docx|xls|xlsx|ppt|pptx|txt|json|csv|mp4|mp3';
+const ALLOWED_EXT_PATTERN = 'png|jpg|jpeg|webp|gif|exe|msi|apk|aab|pdf|plp|zip|rar|7z|tar|gz|doc|docx|xls|xlsx|ppt|pptx|txt|json|csv|mp4|mp3';
 
 /**
  * Resolves a short or full route path into the canonical uploads/YYYY/MM/... storage path.

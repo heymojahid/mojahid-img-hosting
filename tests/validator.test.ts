@@ -117,14 +117,27 @@ describe('File Validator', () => {
     expect(validation.extension).toBe('.pdf');
   });
 
-  it('rejects dangerous executables in general file validation', () => {
-    const fakeBuffer = new Uint8Array(32);
-    const exeValidation = validateGeneralFile(fakeBuffer, 'malware.exe', 'application/octet-stream');
-    expect(exeValidation.valid).toBe(false);
-    expect(exeValidation.error).toContain('prohibited');
+  it('validates EXE and MSI files properly', () => {
+    const fakeBuffer = new Uint8Array([0x4d, 0x5a, 0x90, 0x00]);
+    const exeValidation = validateGeneralFile(fakeBuffer, 'setup.exe', 'application/x-msdownload');
+    expect(exeValidation.valid).toBe(true);
+    expect(exeValidation.extension).toBe('.exe');
+    expect(exeValidation.detectedMimeType).toBe('application/x-msdownload');
 
+    const msiValidation = validateGeneralFile(fakeBuffer, 'installer.msi', 'application/x-msi');
+    expect(msiValidation.valid).toBe(true);
+    expect(msiValidation.extension).toBe('.msi');
+    expect(msiValidation.detectedMimeType).toBe('application/x-msi');
+  });
+
+  it('rejects dangerous scripts in general file validation', () => {
+    const fakeBuffer = new Uint8Array(32);
     const phpValidation = validateGeneralFile(fakeBuffer, 'shell.php', 'text/x-php');
     expect(phpValidation.valid).toBe(false);
     expect(phpValidation.error).toContain('prohibited');
+
+    const batValidation = validateGeneralFile(fakeBuffer, 'script.bat', 'application/x-bat');
+    expect(batValidation.valid).toBe(false);
+    expect(batValidation.error).toContain('prohibited');
   });
 });

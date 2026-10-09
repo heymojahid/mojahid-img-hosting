@@ -11,6 +11,7 @@ import {
   FileText,
   Smartphone,
   Palette,
+  Monitor,
   File,
 } from 'lucide-react';
 import { UploadApiResponse, UploadResultData, UploadCategory } from '@/lib/types';
@@ -24,7 +25,7 @@ interface UnifiedUploaderProps {
 }
 
 const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
-const FORBIDDEN_EXTENSIONS = ['exe', 'bat', 'cmd', 'sh', 'php', 'phtml', 'cgi', 'pl', 'vbs', 'msi', 'com', 'scr'];
+const FORBIDDEN_EXTENSIONS = ['bat', 'cmd', 'sh', 'php', 'phtml', 'cgi', 'pl', 'vbs', 'com', 'scr'];
 
 export function UnifiedUploader({
   maxFileSizeMB = 100,
@@ -221,6 +222,7 @@ export function UnifiedUploader({
 
   const getFileBadgeIcon = (filename: string) => {
     const ext = (filename.split('.').pop() || '').toLowerCase();
+    if (ext === 'exe' || ext === 'msi') return <Monitor className="h-6 w-6 text-blue-400" />;
     if (ext === 'apk' || ext === 'aab') return <Smartphone className="h-6 w-6 text-emerald-400" />;
     if (ext === 'pdf') return <FileText className="h-6 w-6 text-rose-400" />;
     if (ext === 'plp') return <Palette className="h-6 w-6 text-sky-400" />;
@@ -320,11 +322,11 @@ export function UnifiedUploader({
           ) : (
             <div className="mt-2 flex flex-col items-center gap-2">
               <p className="text-xs sm:text-sm text-zinc-400">
-                Supports APK, AAB, PDF, PLP, ZIP, RAR, Docs &bull; Max {maxFileSizeMB} MB
+                Supports EXE, MSI, APK, AAB, PDF, PLP, ZIP, RAR &bull; Max {maxFileSizeMB} MB
               </p>
               {/* Pill tags */}
               <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
-                {['.APK', '.AAB', '.PDF', '.PLP', '.ZIP', '.DOCX'].map((ext) => (
+                {['.EXE', '.MSI', '.APK', '.AAB', '.PDF', '.PLP', '.ZIP', '.RAR'].map((ext) => (
                   <span
                     key={ext}
                     className="px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-400"

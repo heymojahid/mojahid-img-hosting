@@ -222,9 +222,9 @@ export function validateGeneralFile(
     return { valid: false, error: 'File must have a valid extension.' };
   }
 
-  // Strictly prohibited dangerous executable extensions
+  // Strictly prohibited dangerous executable extensions (scripts, web shells, etc.)
   const forbiddenExtensions = [
-    'exe', 'bat', 'cmd', 'sh', 'php', 'phtml', 'cgi', 'pl', 'vbs', 'msi', 'com', 'scr'
+    'bat', 'cmd', 'sh', 'php', 'phtml', 'cgi', 'pl', 'vbs', 'com', 'scr'
   ];
 
   if (forbiddenExtensions.includes(ext)) {

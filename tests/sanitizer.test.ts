@@ -47,25 +47,33 @@ describe('Filename and Path Sanitizer', () => {
     expect(resolveShortImagePath('uploads/2026/10/custom-name.jpg')).toBe(
       'uploads/2026/10/custom-name.jpg'
     );
+    expect(resolveShortImagePath('2610-a1b2c3d4.exe')).toBe(
+      'uploads/2026/10/2610-a1b2c3d4.exe'
+    );
+    expect(resolveShortImagePath('2610-a1b2c3d4.msi')).toBe(
+      'uploads/2026/10/2610-a1b2c3d4.msi'
+    );
   });
 
   it('rejects path traversal in resolveShortImagePath', () => {
     expect(resolveShortImagePath('../../../etc/passwd')).toBeNull();
     expect(resolveShortImagePath('2610-../../../secret.jpg')).toBeNull();
-    expect(resolveShortImagePath('random-invalid-file.exe')).toBeNull();
+    expect(resolveShortImagePath('random-invalid-file.php')).toBeNull();
   });
 
   it('correctly validates legitimate upload paths', () => {
     expect(isValidUploadPath('uploads/2026/10/2610-a1b2c3d4.png')).toBe(true);
     expect(isValidUploadPath('uploads/2025/01/999999999999-avatar.jpg')).toBe(true);
     expect(isValidUploadPath('uploads/2026/12/33ff1122aacc-image.webp')).toBe(true);
+    expect(isValidUploadPath('uploads/2026/10/2610-a1b2c3d4.exe')).toBe(true);
+    expect(isValidUploadPath('uploads/2026/10/2610-a1b2c3d4.msi')).toBe(true);
   });
 
   it('rejects path traversal and unauthorized paths', () => {
     expect(isValidUploadPath('uploads/../../etc/passwd')).toBe(false);
     expect(isValidUploadPath('../uploads/2026/10/file.png')).toBe(false);
     expect(isValidUploadPath('uploads/2026/10/../../../secret.env')).toBe(false);
-    expect(isValidUploadPath('uploads/2026/10/file.exe')).toBe(false);
+    expect(isValidUploadPath('uploads/2026/10/file.bat')).toBe(false);
     expect(isValidUploadPath('uploads/2026/10/file.php')).toBe(false);
     expect(isValidUploadPath('/uploads/2026/10/file.png')).toBe(false);
     expect(isValidUploadPath('uploads/2026/1/file.png')).toBe(false); // single digit month

@@ -12,6 +12,7 @@ import {
   Download,
   Smartphone,
   Palette,
+  Monitor,
   File,
 } from 'lucide-react';
 import { UploadResultData } from '@/lib/types';
@@ -54,6 +55,18 @@ export function UploadResultCard({ data, onReset }: UploadResultCardProps) {
   // Pick file icon
   const renderFileIcon = () => {
     const ext = fileExt.toLowerCase();
+    if (ext === 'exe' || ext === 'msi') {
+      return (
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex h-20 w-20 items-center justify-center rounded-2xl border border-blue-500/30 bg-blue-500/10 shadow-[0_0_40px_-10px_rgba(59,130,246,0.3)]">
+            <Monitor className="h-10 w-10 text-blue-400" />
+          </div>
+          <span className="text-xs font-mono font-bold text-blue-400 tracking-wider">
+            WINDOWS APPLICATION ({fileExt})
+          </span>
+        </div>
+      );
+    }
     if (ext === 'apk' || ext === 'aab') {
       return (
         <div className="flex flex-col items-center gap-3">

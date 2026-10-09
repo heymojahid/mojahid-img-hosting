@@ -21,8 +21,10 @@ export const MIME_TO_EXTENSION: Record<AllowedMimeType, string> = {
   'image/gif': '.gif',
 };
 
-// Supported file extensions for files upload (APK, AAB, PDF, PLP, ZIP, etc.)
+// Supported file extensions for files upload (EXE, MSI, APK, AAB, PDF, PLP, ZIP, etc.)
 export const ALLOWED_FILE_EXTENSIONS: readonly string[] = [
+  'exe',
+  'msi',
   'apk',
   'aab',
   'pdf',
@@ -51,6 +53,8 @@ export const EXTENSION_TO_MIME: Record<string, string> = {
   '.jpeg': 'image/jpeg',
   '.webp': 'image/webp',
   '.gif': 'image/gif',
+  '.exe': 'application/x-msdownload',
+  '.msi': 'application/x-msi',
   '.apk': 'application/vnd.android.package-archive',
   '.aab': 'application/octet-stream',
   '.pdf': 'application/pdf',
