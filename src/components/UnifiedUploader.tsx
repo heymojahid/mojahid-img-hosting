@@ -27,129 +27,84 @@ interface UnifiedUploaderProps {
 const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const FORBIDDEN_EXTENSIONS = ['bat', 'cmd', 'sh', 'php', 'phtml', 'cgi', 'pl', 'vbs', 'com', 'scr'];
 
-function readFileAsBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64 = result.includes(',') ? result.split(',')[1] : result;
-      resolve(base64);
-    };
-    reader.onerror = () => reject(new Error('Failed to read file from disk.'));
-    reader.readAsDataURL(file);
-  });
-}
-
-async function uploadDirectToGitHub(
-  uploadUrl: string,
-  githubToken: string,
-  branch: string,
-  filename: string,
-  base64Content: string,
+async function uploadFileInChunks(
+  file: File,
+  category: 'image' | 'file',
+  passwordToken: string,
   onProgress: (percent: number) => void
-): Promise<{ sha: string }> {
-  // Try XMLHttpRequest for real-time progress tracking
-  if (typeof XMLHttpRequest !== 'undefined') {
+): Promise<UploadResultData> {
+  const CHUNK_SIZE = 3 * 1024 * 1024; // 3.0 MB chunk size (strictly below Vercel 4.5MB limit)
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const uploadId =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `upload_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+  onProgress(5);
+
+  let finalResult: UploadResultData | null = null;
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE;
+    const end = Math.min(file.size, start + CHUNK_SIZE);
+    const chunkBlob = file.slice(start, end);
+
+    const formData = new FormData();
+    formData.append('uploadId', uploadId);
+    formData.append('chunkIndex', String(i));
+    formData.append('totalChunks', String(totalChunks));
+    formData.append('filename', file.name);
+    formData.append('category', category);
+    formData.append('password', passwordToken);
+    formData.append('chunk', chunkBlob, `chunk_${i}.bin`);
+
+    const response = await fetch('/api/upload/chunk', {
+      method: 'POST',
+      headers: {
+        'x-app-password': passwordToken,
+      },
+      body: formData,
+    });
+
+    let data: {
+      success: boolean;
+      completed?: boolean;
+      file?: UploadResultData;
+      error?: string;
+    };
+
     try {
-      return await new Promise<{ sha: string }>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('PUT', uploadUrl);
-        xhr.setRequestHeader('Authorization', `Bearer ${githubToken}`);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable && event.total > 0) {
-            const percent = Math.min(99, Math.round((event.loaded / event.total) * 100));
-            onProgress(percent);
-          }
-        };
-
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            let sha = '';
-            try {
-              const resp = JSON.parse(xhr.responseText);
-              sha = resp.content?.sha || '';
-            } catch {
-              // ignore
-            }
-            onProgress(100);
-            resolve({ sha });
-          } else {
-            let errorMsg = '';
-            try {
-              const resp = JSON.parse(xhr.responseText);
-              errorMsg = resp.message || '';
-            } catch {
-              errorMsg = xhr.statusText;
-            }
-
-            if (xhr.status === 422 || xhr.status === 413) {
-              reject(new Error(`GitHub storage limit: ${errorMsg || 'File exceeds GitHub limit (max 100MB).'}`));
-            } else if (xhr.status === 401) {
-              reject(new Error(`GitHub token unauthorized (401): ${errorMsg || 'Unauthorized'}`));
-            } else {
-              reject(new Error(`GitHub upload failed (${xhr.status}): ${errorMsg || xhr.statusText}`));
-            }
-          }
-        };
-
-        xhr.onerror = () => {
-          reject(new Error('XHR_NETWORK_ERROR'));
-        };
-
-        xhr.ontimeout = () => {
-          reject(new Error('Upload timed out connecting to GitHub.'));
-        };
-
-        const payload = JSON.stringify({
-          message: `Upload ${filename} via MojahidX Image Hosting`,
-          content: base64Content,
-          branch,
-        });
-
-        xhr.send(payload);
-      });
-    } catch (xhrErr) {
-      if (xhrErr instanceof Error && xhrErr.message !== 'XHR_NETWORK_ERROR') {
-        throw xhrErr;
-      }
-      // If XHR failed due to browser network quirk, fallback to native fetch below
-    }
-  }
-
-  // Fallback to native fetch
-  onProgress(50);
-  const response = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: {
-      'Authorization': `Bearer ${githubToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      message: `Upload ${filename} via MojahidX Image Hosting`,
-      content: base64Content,
-      branch,
-    }),
-  });
-
-  if (!response.ok) {
-    let errorMsg = '';
-    try {
-      const data = await response.json();
-      errorMsg = data.message || '';
+      const text = await response.text();
+      data = JSON.parse(text);
     } catch {
-      errorMsg = response.statusText;
+      if (response.status === 413) {
+        throw new Error('Chunk payload exceeds server limit.');
+      }
+      throw new Error(`Server returned HTTP ${response.status}: ${response.statusText}`);
     }
-    if (response.status === 401) {
-      throw new Error(`GitHub token unauthorized (401): ${errorMsg || 'Unauthorized'}`);
+
+    if (!response.ok || !data.success) {
+      if (response.status === 401) {
+        throw new Error('UNAUTHORIZED_PASSWORD');
+      }
+      throw new Error(data.error || `Upload failed at chunk ${i + 1}/${totalChunks}.`);
     }
-    throw new Error(`GitHub upload failed (${response.status}): ${errorMsg || response.statusText}`);
+
+    // Scale progress smoothly up to 98% during chunks, 100% on completion
+    const chunkProgress = Math.min(98, Math.round(((i + 1) / totalChunks) * 98));
+    onProgress(chunkProgress);
+
+    if (data.completed && data.file) {
+      finalResult = data.file;
+    }
   }
 
-  const data = await response.json().catch(() => ({}));
+  if (!finalResult) {
+    throw new Error('Upload completed without receiving file details.');
+  }
+
   onProgress(100);
-  return { sha: data.content?.sha || '' };
+  return finalResult;
 }
 
 export function UnifiedUploader({
@@ -267,83 +222,12 @@ export function UnifiedUploader({
     setUploadProgress(5);
 
     try {
-      // Step 1: Request direct GitHub upload ticket (bypassing Vercel 4.5MB Serverless function limit)
-      const ticketResponse = await fetch('/api/upload/ticket', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-app-password': token,
-        },
-        body: JSON.stringify({
-          filename: selectedFile.name,
-          size: selectedFile.size,
-          type: selectedFile.type,
-          category: activeTab,
-          password: token,
-        }),
-      });
-
-      let ticketResult: {
-        success: boolean;
-        uploadUrl?: string;
-        branch?: string;
-        token?: string;
-        file?: UploadResultData;
-        error?: string;
-      };
-
-      try {
-        const text = await ticketResponse.text();
-        ticketResult = JSON.parse(text);
-      } catch {
-        if (ticketResponse.status === 413) {
-          throw new Error('File metadata too large for server.');
-        }
-        throw new Error(`Server returned HTTP ${ticketResponse.status}: ${ticketResponse.statusText}`);
-      }
-
-      if (!ticketResponse.ok || !ticketResult.success) {
-        if (ticketResponse.status === 401) {
-          localStorage.removeItem('mojahidx_auth_token');
-          if (onRequestAuth) {
-            onRequestAuth((newToken) => executeUpload(newToken));
-            setUploading(false);
-            setUploadProgress(0);
-            return;
-          }
-        }
-        throw new Error(ticketResult.error || 'Failed to initialize upload ticket.');
-      }
-
-      const { uploadUrl, branch, token: ghToken, file: fileData } = ticketResult;
-
-      if (!uploadUrl || !branch || !ghToken || !fileData) {
-        throw new Error('Incomplete upload ticket from server.');
-      }
-
-      setUploadProgress(15);
-
-      // Step 2: Read file as Base64 in browser memory
-      const base64Content = await readFileAsBase64(selectedFile);
-      setUploadProgress(25);
-
-      // Step 3: Stream directly to GitHub REST API (supports up to 100MB with real progress)
-      const { sha } = await uploadDirectToGitHub(
-        uploadUrl,
-        ghToken,
-        branch,
-        selectedFile.name,
-        base64Content,
-        (progress) => {
-          // Scale from 25% to 100%
-          const scaled = 25 + Math.round((progress / 100) * 75);
-          setUploadProgress(scaled);
-        }
+      const fileData = await uploadFileInChunks(
+        selectedFile,
+        activeTab,
+        token,
+        (progress) => setUploadProgress(progress)
       );
-
-      if (sha) {
-        fileData.sha = sha;
-      }
 
       setUploadProgress(100);
 
@@ -353,6 +237,15 @@ export function UnifiedUploader({
         resetSelection();
       }, 250);
     } catch (err) {
+      if (err instanceof Error && err.message === 'UNAUTHORIZED_PASSWORD') {
+        localStorage.removeItem('mojahidx_auth_token');
+        if (onRequestAuth) {
+          onRequestAuth((newToken) => executeUpload(newToken));
+          setUploading(false);
+          setUploadProgress(0);
+          return;
+        }
+      }
       const msg = err instanceof Error ? err.message : 'Network error during upload.';
       setErrorMessage(msg);
       setUploading(false);
