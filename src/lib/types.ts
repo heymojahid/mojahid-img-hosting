@@ -4,17 +4,20 @@ export type AllowedMimeType =
   | 'image/webp'
   | 'image/gif';
 
+export type UploadCategory = 'image' | 'file';
+
 export interface UploadResultData {
   name: string;
   storedName: string;
   path: string;
   size: number;
-  mimeType: AllowedMimeType;
+  mimeType: string;
   sha: string;
   directUrl: string;
   customDomainUrl: string | null;
   proxyUrl: string;
   uploadedAt: string;
+  category?: UploadCategory;
 }
 
 export interface UploadSuccessResponse {
@@ -49,4 +52,5 @@ export interface SystemStatusResponse {
   publicBaseUrl?: string;
   maxFileSizeMB: number;
   allowedFormats: string[];
+  passwordProtected?: boolean;
 }

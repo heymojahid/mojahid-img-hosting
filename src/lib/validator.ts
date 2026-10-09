@@ -1,6 +1,7 @@
 import {
   ALLOWED_MIME_TYPES,
   DEFAULT_MAX_FILE_SIZE_BYTES,
+  EXTENSION_TO_MIME,
   MAGIC_NUMBERS,
   PROHIBITED_SIGNATURES,
 } from './constants';
@@ -10,6 +11,13 @@ export interface FileValidationResult {
   valid: boolean;
   error?: string;
   detectedMimeType?: AllowedMimeType;
+}
+
+export interface GeneralFileValidationResult {
+  valid: boolean;
+  error?: string;
+  detectedMimeType?: string;
+  extension?: string;
 }
 
 /**
@@ -35,7 +43,6 @@ function matchesBytes(
  * Detects whether the buffer contains text markers indicating SVG, XML, HTML, or script content.
  */
 function containsForbiddenTextPayload(buffer: Uint8Array): boolean {
-  // Check the first 1024 bytes as text
   const checkLength = Math.min(buffer.length, 1024);
   const textHeader = new TextDecoder('utf-8', { fatal: false })
     .decode(buffer.subarray(0, checkLength))
@@ -62,7 +69,7 @@ function containsForbiddenTextPayload(buffer: Uint8Array): boolean {
 }
 
 /**
- * Detects the file format from its binary magic bytes.
+ * Detects image file format from its binary magic bytes.
  */
 export function detectFileSignature(buffer: Uint8Array): AllowedMimeType | null {
   // 1. Prohibited binary executable signatures check
@@ -121,7 +128,7 @@ export function formatBytes(bytes: number): string {
 }
 
 /**
- * Validates an uploaded file buffer against MIME, magic numbers, and size limits.
+ * Validates an uploaded image file buffer against MIME, magic numbers, and size limits.
  */
 export function validateImageFile(
   buffer: Uint8Array,
@@ -184,5 +191,58 @@ export function validateImageFile(
   return {
     valid: true,
     detectedMimeType: detectedMime,
+  };
+}
+
+/**
+ * Validates general files (APK, AAB, PDF, PLP, ZIP, documents) up to 100MB.
+ */
+export function validateGeneralFile(
+  buffer: Uint8Array,
+  fileName: string,
+  declaredMimeType: string,
+  maxSizeBytes: number = DEFAULT_MAX_FILE_SIZE_BYTES
+): GeneralFileValidationResult {
+  if (!buffer || buffer.length === 0) {
+    return { valid: false, error: 'File is empty.' };
+  }
+
+  if (buffer.length > maxSizeBytes) {
+    return {
+      valid: false,
+      error: `File size (${formatBytes(buffer.length)}) exceeds the maximum allowed limit of ${formatBytes(maxSizeBytes)}.`,
+    };
+  }
+
+  // Extract clean extension
+  const extMatch = fileName.toLowerCase().match(/\.([a-z0-9]+)$/);
+  const ext = extMatch ? extMatch[1] : '';
+
+  if (!ext) {
+    return { valid: false, error: 'File must have a valid extension.' };
+  }
+
+  // Strictly prohibited dangerous executable extensions
+  const forbiddenExtensions = [
+    'exe', 'bat', 'cmd', 'sh', 'php', 'phtml', 'cgi', 'pl', 'vbs', 'msi', 'com', 'scr'
+  ];
+
+  if (forbiddenExtensions.includes(ext)) {
+    return {
+      valid: false,
+      error: `Files with .${ext} extension are strictly prohibited for security reasons.`,
+    };
+  }
+
+  const dotExt = `.${ext}`;
+  const resolvedMime =
+    EXTENSION_TO_MIME[dotExt] ||
+    declaredMimeType ||
+    'application/octet-stream';
+
+  return {
+    valid: true,
+    detectedMimeType: resolvedMime,
+    extension: dotExt,
   };
 }

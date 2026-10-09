@@ -3,9 +3,9 @@ import { getStorageConfig, uploadToGitHub } from '@/lib/github';
 import { getRateLimiter } from '@/lib/rate-limiter';
 import { generateUploadPath } from '@/lib/sanitizer';
 import { buildAppProxyUrl, buildCustomDomainUrl, buildRawGitHubUrl } from '@/lib/url';
-import { validateImageFile } from '@/lib/validator';
-import { UploadApiResponse } from '@/lib/types';
-
+import { validateGeneralFile, validateImageFile } from '@/lib/validator';
+import { UploadApiResponse, UploadCategory } from '@/lib/types';
+import { APP_DEFAULT_PASSWORD } from '@/lib/constants';
 
 function getClientIp(req: NextRequest): string {
   const forwardedFor = req.headers.get('x-forwarded-for');
@@ -19,13 +19,25 @@ function getClientIp(req: NextRequest): string {
   return '127.0.0.1';
 }
 
+function verifyAuthorization(req: NextRequest, formPassword?: string | null): boolean {
+  const expected = process.env.APP_PASSWORD?.trim() || APP_DEFAULT_PASSWORD;
+  const authCookie = req.cookies.get('mojahidx_auth')?.value;
+  const authHeader = req.headers.get('x-app-password');
+
+  return (
+    authCookie === 'authorized' ||
+    authHeader === expected ||
+    formPassword === expected
+  );
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse<UploadApiResponse>> {
   try {
     // 1. Rate limiting check
     const clientIp = getClientIp(req);
     const maxRequests = process.env.RATE_LIMIT_MAX_REQUESTS
       ? parseInt(process.env.RATE_LIMIT_MAX_REQUESTS, 10)
-      : 25;
+      : 50;
     const windowSeconds = process.env.RATE_LIMIT_WINDOW_SECONDS
       ? parseInt(process.env.RATE_LIMIT_WINDOW_SECONDS, 10)
       : 600;
@@ -82,41 +94,88 @@ export async function POST(req: NextRequest): Promise<NextResponse<UploadApiResp
       );
     }
 
+    // 4. Password Authorization Check (Personal Use Only)
+    const formPassword = formData.get('password')?.toString();
+    if (!verifyAuthorization(req, formPassword)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Unauthorized: Personal access password required.',
+          code: 'UNAUTHORIZED',
+        },
+        { status: 401 }
+      );
+    }
+
     const file = formData.get('file');
     if (!file || !(file instanceof File)) {
       return NextResponse.json(
         {
           success: false,
-          error: 'No image file was provided. Expected form field "file".',
+          error: 'No file was provided. Expected form field "file".',
           code: 'NO_FILE',
         },
         { status: 400 }
       );
     }
 
-    // 4. Extract buffer & validate file signature + mime + size
+    const rawCategory = formData.get('category')?.toString()?.toLowerCase();
+    const category: UploadCategory = rawCategory === 'file' ? 'file' : 'image';
+
+    // 5. Extract buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = new Uint8Array(arrayBuffer);
 
-    const validation = validateImageFile(buffer, file.type, config.maxFileSizeBytes);
-    if (!validation.valid || !validation.detectedMimeType) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: validation.error || 'File validation failed.',
-          code: 'INVALID_FILE',
-        },
-        { status: 400 }
+    let detectedMime = 'application/octet-stream';
+    let fileExtension: string | undefined;
+
+    // Up to 100 MB limit
+    const maxSizeBytes = 100 * 1024 * 1024;
+
+    if (category === 'file') {
+      const generalValidation = validateGeneralFile(
+        buffer,
+        file.name,
+        file.type,
+        maxSizeBytes
       );
+      if (!generalValidation.valid) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: generalValidation.error || 'File validation failed.',
+            code: 'INVALID_FILE',
+          },
+          { status: 400 }
+        );
+      }
+      detectedMime = generalValidation.detectedMimeType || 'application/octet-stream';
+      fileExtension = generalValidation.extension;
+    } else {
+      // Image category
+      const imgValidation = validateImageFile(buffer, file.type, maxSizeBytes);
+      if (!imgValidation.valid || !imgValidation.detectedMimeType) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: imgValidation.error || 'Image validation failed.',
+            code: 'INVALID_FILE',
+          },
+          { status: 400 }
+        );
+      }
+      detectedMime = imgValidation.detectedMimeType;
     }
 
-    // 5. Generate unique safe path under uploads/YYYY/MM/
+    // 6. Generate unique safe path under uploads/YYYY/MM/
     const { storedName, path } = generateUploadPath(
       file.name,
-      validation.detectedMimeType
+      detectedMime,
+      new Date(),
+      fileExtension
     );
 
-    // 6. Upload directly to GitHub REST Contents API
+    // 7. Upload directly to GitHub REST Contents API
     const githubResult = await uploadToGitHub(
       config,
       path,
@@ -124,7 +183,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<UploadApiResp
       file.name
     );
 
-    // 7. Formulate URLs
+    // 8. Formulate URLs
     const directUrl = buildRawGitHubUrl(
       config.owner,
       config.repo,
@@ -134,7 +193,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<UploadApiResp
     const customDomainUrl = buildCustomDomainUrl(config.publicImageBaseUrl, path);
     const proxyUrl = buildAppProxyUrl(path);
 
-    // 8. Return response
+    // 9. Return response
     return NextResponse.json(
       {
         success: true,
@@ -143,12 +202,13 @@ export async function POST(req: NextRequest): Promise<NextResponse<UploadApiResp
           storedName,
           path,
           size: buffer.length,
-          mimeType: validation.detectedMimeType,
+          mimeType: detectedMime,
           sha: githubResult.sha,
           directUrl,
           customDomainUrl,
           proxyUrl,
           uploadedAt: new Date().toISOString(),
+          category,
         },
       },
       {

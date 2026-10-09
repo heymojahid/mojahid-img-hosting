@@ -31,12 +31,13 @@ export function sanitizeFilenameSlug(originalName: string): string {
 /**
  * Generates an immutable, non-colliding ultra-short path under uploads/YYYY/MM/
  * Format: uploads/YYYY/MM/YYMM-hash.ext
- * E.g., uploads/2026/10/2610-a1b2c3d4.png
+ * E.g., uploads/2026/10/2610-a1b2c3d4.png or 2610-a1b2c3d4.apk
  */
 export function generateUploadPath(
   originalName: string,
-  detectedMime: AllowedMimeType,
-  date: Date = new Date()
+  detectedMime: string,
+  date: Date = new Date(),
+  customExtension?: string
 ): {
   storedName: string;
   path: string;
@@ -50,9 +51,15 @@ export function generateUploadPath(
   // 8-character random hexadecimal unique identifier (4.29 billion combinations per month)
   const randomHex = crypto.randomBytes(4).toString('hex');
 
-  const extension = MIME_TO_EXTENSION[detectedMime] || '.png';
+  let extension = '.png';
+  if (customExtension) {
+    extension = customExtension.startsWith('.') ? customExtension : `.${customExtension}`;
+  } else if (MIME_TO_EXTENSION[detectedMime as AllowedMimeType]) {
+    extension = MIME_TO_EXTENSION[detectedMime as AllowedMimeType];
+  }
+
   const shortId = `${shortYear}${month}-${randomHex}`; // "2610-a1b2c3d4"
-  const storedName = `${shortId}${extension}`; // "2610-a1b2c3d4.png"
+  const storedName = `${shortId}${extension}`; // "2610-a1b2c3d4.ext"
   const path = `uploads/${fullYear}/${month}/${storedName}`;
 
   return {
@@ -63,19 +70,23 @@ export function generateUploadPath(
   };
 }
 
+const ALLOWED_EXT_PATTERN = 'png|jpg|jpeg|webp|gif|apk|aab|pdf|plp|zip|rar|7z|tar|gz|doc|docx|xls|xlsx|ppt|pptx|txt|json|csv|mp4|mp3';
+
 /**
  * Resolves a short or full route path into the canonical uploads/YYYY/MM/... storage path.
  * Supports:
  * - 2610-a1b2c3d4.png -> uploads/2026/10/2610-a1b2c3d4.png
- * - 2026/10/filename.png -> uploads/2026/10/filename.png
+ * - 2610-a1b2c3d4.apk -> uploads/2026/10/2610-a1b2c3d4.apk
+ * - 2026/10/filename.ext -> uploads/2026/10/filename.ext
  */
 export function resolveShortImagePath(pathParam: string): string | null {
   if (!pathParam || typeof pathParam !== 'string') return null;
 
   const normalized = pathParam.replace(/\\/g, '/').replace(/^\/+/, '');
 
-  // 1. Check ultra-short format: YYMM-hash.ext (e.g. 2610-a1b2c3d4.jpg)
-  const shortMatch = normalized.match(/^(\d{2})(\d{2})-([a-fA-F0-9]{8})\.(png|jpg|jpeg|webp|gif)$/i);
+  // 1. Check ultra-short format: YYMM-hash.ext (e.g. 2610-a1b2c3d4.jpg or .apk)
+  const shortRegex = new RegExp(`^(\\d{2})(\\d{2})-([a-fA-F0-9]{8})\\.(${ALLOWED_EXT_PATTERN})$`, 'i');
+  const shortMatch = normalized.match(shortRegex);
   if (shortMatch) {
     const fullYear = `20${shortMatch[1]}`;
     const month = shortMatch[2];
@@ -107,8 +118,7 @@ export function isValidUploadPath(path: string): boolean {
   }
 
   // Regex pattern strictly matching: uploads/YYYY/MM/filename.ext
-  // YYYY = 4 digits, MM = 2 digits, filename = alphanumeric, hyphens, underscores, dots
-  const uploadPathRegex = /^uploads\/\d{4}\/\d{2}\/[a-zA-Z0-9_\-\.]+\.(png|jpg|jpeg|webp|gif)$/i;
+  const uploadPathRegex = new RegExp(`^uploads/\\d{4}/\\d{2}/[a-zA-Z0-9_\\-\\.]+\\.(${ALLOWED_EXT_PATTERN})$`, 'i');
 
   return uploadPathRegex.test(normalized);
 }

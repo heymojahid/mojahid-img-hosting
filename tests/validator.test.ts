@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectFileSignature, validateImageFile } from '../src/lib/validator';
+import { detectFileSignature, validateImageFile, validateGeneralFile } from '../src/lib/validator';
 import { MAGIC_NUMBERS, PROHIBITED_SIGNATURES } from '../src/lib/constants';
 
 describe('File Validator', () => {
@@ -89,5 +89,42 @@ describe('File Validator', () => {
     const validation = validateImageFile(pngBuf, 'image/png');
     expect(validation.valid).toBe(true);
     expect(validation.detectedMimeType).toBe('image/png');
+  });
+
+  // Tests for General File Upload (APK, AAB, PDF, PLP, ZIP)
+  it('validates APK files properly', () => {
+    const fakeApk = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00]); // zip/apk header
+    const validation = validateGeneralFile(fakeApk, 'awesome-game.apk', 'application/vnd.android.package-archive');
+    expect(validation.valid).toBe(true);
+    expect(validation.extension).toBe('.apk');
+  });
+
+  it('validates AAB and PLP files properly', () => {
+    const fakeBuffer = new Uint8Array(64);
+    const aabValidation = validateGeneralFile(fakeBuffer, 'bundle.aab', 'application/octet-stream');
+    expect(aabValidation.valid).toBe(true);
+    expect(aabValidation.extension).toBe('.aab');
+
+    const plpValidation = validateGeneralFile(fakeBuffer, 'project-design.plp', 'application/octet-stream');
+    expect(plpValidation.valid).toBe(true);
+    expect(plpValidation.extension).toBe('.plp');
+  });
+
+  it('validates PDF files properly', () => {
+    const fakePdf = new Uint8Array([0x25, 0x50, 0x44, 0x46]); // %PDF
+    const validation = validateGeneralFile(fakePdf, 'invoice.pdf', 'application/pdf');
+    expect(validation.valid).toBe(true);
+    expect(validation.extension).toBe('.pdf');
+  });
+
+  it('rejects dangerous executables in general file validation', () => {
+    const fakeBuffer = new Uint8Array(32);
+    const exeValidation = validateGeneralFile(fakeBuffer, 'malware.exe', 'application/octet-stream');
+    expect(exeValidation.valid).toBe(false);
+    expect(exeValidation.error).toContain('prohibited');
+
+    const phpValidation = validateGeneralFile(fakeBuffer, 'shell.php', 'text/x-php');
+    expect(phpValidation.valid).toBe(false);
+    expect(phpValidation.error).toContain('prohibited');
   });
 });

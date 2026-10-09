@@ -1,14 +1,17 @@
 'use client';
 
 import React from 'react';
+import { Lock } from 'lucide-react';
 import { SystemStatusResponse } from '@/lib/types';
 
 interface NavbarProps {
   status: SystemStatusResponse | null;
   loadingStatus: boolean;
+  isAuthenticated?: boolean;
+  onLock?: () => void;
 }
 
-export function Navbar({ status, loadingStatus }: NavbarProps) {
+export function Navbar({ status, loadingStatus, isAuthenticated, onLock }: NavbarProps) {
   const isConfigured = status?.configured;
 
   return (
@@ -26,8 +29,8 @@ export function Navbar({ status, loadingStatus }: NavbarProps) {
           </div>
         </div>
 
-        {/* Status Indicator */}
-        <div className="flex items-center gap-2 text-xs">
+        {/* Status Indicator & Lock Button */}
+        <div className="flex items-center gap-2.5 text-xs">
           {loadingStatus ? (
             <span className="h-2 w-2 rounded-full bg-zinc-700 animate-pulse" />
           ) : isConfigured ? (
@@ -40,6 +43,17 @@ export function Navbar({ status, loadingStatus }: NavbarProps) {
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
               <span>setup token</span>
             </div>
+          )}
+
+          {isAuthenticated && onLock && (
+            <button
+              onClick={onLock}
+              title="Lock private vault"
+              className="flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-[11px] text-zinc-400 hover:text-white hover:border-zinc-700 transition"
+            >
+              <Lock className="h-3 w-3 text-zinc-400" />
+              <span className="hidden sm:inline">Lock</span>
+            </button>
           )}
         </div>
       </div>
