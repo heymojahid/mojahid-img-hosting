@@ -5,13 +5,31 @@ import { Navbar } from '@/components/Navbar';
 import { UnifiedUploader } from '@/components/UnifiedUploader';
 import { UploadResultCard } from '@/components/UploadResultCard';
 import { PasswordModal } from '@/components/PasswordModal';
+import { UploadHistory } from '@/components/UploadHistory';
+import { UploadHistoryModal } from '@/components/UploadHistoryModal';
 import { Footer } from '@/components/Footer';
 import { SystemStatusResponse, UploadResultData } from '@/lib/types';
+import {
+  UploadHistoryItem,
+  getUploadHistory,
+  addUploadToHistory,
+  removeUploadFromHistory,
+  clearUploadHistory,
+} from '@/lib/history';
 
 export default function HomePage() {
   const [status, setStatus] = useState<SystemStatusResponse | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [currentUpload, setCurrentUpload] = useState<UploadResultData | null>(null);
+
+  // Upload History State (persisted in localStorage)
+  const [history, setHistory] = useState<UploadHistoryItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      return getUploadHistory();
+    }
+    return [];
+  });
+  const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
 
   // Authentication State (Password protection: Mojahid@1234)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -32,6 +50,7 @@ export default function HomePage() {
   const [pendingUploadCallback, setPendingUploadCallback] = useState<((pwd: string) => void) | null>(null);
 
   useEffect(() => {
+
     // If not authenticated via local token, check server cookie session asynchronously
     if (!isAuthenticated) {
       fetch('/api/auth')
@@ -97,6 +116,22 @@ export default function HomePage() {
     }
   };
 
+  const handleUploadSuccess = (data: UploadResultData) => {
+    setCurrentUpload(data);
+    const updated = addUploadToHistory(data);
+    setHistory(updated);
+  };
+
+  const handleRemoveHistoryItem = (id: string) => {
+    const updated = removeUploadFromHistory(id);
+    setHistory(updated);
+  };
+
+  const handleClearHistory = () => {
+    clearUploadHistory();
+    setHistory([]);
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-black text-zinc-100 font-sans selection:bg-white selection:text-black">
       {/* Password Vault Modal (only shown when an upload is requested without active auth) */}
@@ -106,14 +141,25 @@ export default function HomePage() {
         onClose={handleCloseModal}
       />
 
+      {/* Upload History Overlay Modal */}
+      <UploadHistoryModal
+        isOpen={showHistoryModal}
+        items={history}
+        onClose={() => setShowHistoryModal(false)}
+        onRemoveItem={handleRemoveHistoryItem}
+        onClearAll={handleClearHistory}
+      />
+
       <Navbar
         status={status}
         loadingStatus={loadingStatus}
         isAuthenticated={isAuthenticated}
         onLock={handleLock}
+        historyCount={history.length}
+        onOpenHistory={() => setShowHistoryModal(true)}
       />
 
-      <main className="flex-1 flex flex-col items-center justify-center px-4 py-8 sm:py-16">
+      <main className="flex-1 flex flex-col items-center justify-start px-4 py-8 sm:py-14">
         <div className={`w-full ${currentUpload ? 'max-w-2xl' : 'max-w-xl'} mx-auto transition-all duration-300`}>
           {/* Headline (Only shown during upload state) */}
           {!currentUpload && (
@@ -140,10 +186,21 @@ export default function HomePage() {
                 authToken={authToken}
                 isAuthenticated={isAuthenticated}
                 onRequestAuth={handleRequestAuth}
-                onUploadSuccess={(data) => setCurrentUpload(data)}
+                onUploadSuccess={handleUploadSuccess}
               />
             )}
           </div>
+
+          {/* Persistent Upload History Section */}
+          {history.length > 0 && (
+            <div className="mt-10 sm:mt-12 w-full animate-in fade-in slide-in-from-bottom-3 duration-300">
+              <UploadHistory
+                items={history}
+                onRemoveItem={handleRemoveHistoryItem}
+                onClearAll={handleClearHistory}
+              />
+            </div>
+          )}
         </div>
       </main>
 
