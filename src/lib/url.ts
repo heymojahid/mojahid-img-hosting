@@ -22,8 +22,9 @@ export function buildRawGitHubUrl(
 }
 
 /**
- * Builds the custom domain image URL if PUBLIC_IMAGE_BASE_URL is configured.
- * E.g., https://img.mojahidx.com/uploads/2026/10/xyz-file.png
+ * Builds the custom domain image URL if PUBLIC_IMAGE_BASE_URL or CUSTOM_IMAGE_BASE_URL is configured.
+ * For ultra-short format (uploads/YYYY/MM/YYMM-hash.ext), generates:
+ * https://img.mojahidx.com/i/YYMM-hash.ext
  */
 export function buildCustomDomainUrl(
   baseUrl: string | undefined,
@@ -39,15 +40,30 @@ export function buildCustomDomainUrl(
   // Strip leading slashes from file path
   const cleanPath = filePath.replace(/^\/+/, '');
 
+  // If ultra-short format (uploads/YYYY/MM/YYMM-hash.ext), compress to /i/YYMM-hash.ext
+  const shortMatch = cleanPath.match(
+    /^uploads\/\d{4}\/\d{2}\/(\d{4}-[a-fA-F0-9]{8}\.[a-zA-Z0-9]+)$/i
+  );
+  if (shortMatch) {
+    return `${cleanBase}/i/${shortMatch[1]}`;
+  }
+
   return `${cleanBase}/${cleanPath}`;
 }
 
 /**
  * Builds the application proxy URL (served by this app's route handler).
- * E.g., /uploads/2026/10/xyz-file.png
+ * E.g., /i/2610-a1b2c3d4.png or /uploads/2026/10/file.png
  */
 export function buildAppProxyUrl(filePath: string): string {
   const cleanPath = filePath.replace(/^\/+/, '');
-  // Ensure starts with /
+
+  const shortMatch = cleanPath.match(
+    /^uploads\/\d{4}\/\d{2}\/(\d{4}-[a-fA-F0-9]{8}\.[a-zA-Z0-9]+)$/i
+  );
+  if (shortMatch) {
+    return `/i/${shortMatch[1]}`;
+  }
+
   return `/${cleanPath}`;
 }

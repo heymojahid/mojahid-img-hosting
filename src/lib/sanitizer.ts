@@ -29,7 +29,9 @@ export function sanitizeFilenameSlug(originalName: string): string {
 }
 
 /**
- * Generates an immutable, non-colliding path under uploads/YYYY/MM/
+ * Generates an immutable, non-colliding ultra-short path under uploads/YYYY/MM/
+ * Format: uploads/YYYY/MM/YYMM-hash.ext
+ * E.g., uploads/2026/10/2610-a1b2c3d4.png
  */
 export function generateUploadPath(
   originalName: string,
@@ -39,24 +41,54 @@ export function generateUploadPath(
   storedName: string;
   path: string;
   extension: string;
+  shortId: string;
 } {
-  const year = date.getUTCFullYear().toString();
-  const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+  const fullYear = date.getUTCFullYear().toString(); // "2026"
+  const shortYear = fullYear.slice(-2); // "26"
+  const month = (date.getUTCMonth() + 1).toString().padStart(2, '0'); // "10"
 
-  // Generate 12-char random alphanumeric identifier
-  const uniqueId = crypto.randomBytes(6).toString('hex');
+  // 8-character random hexadecimal unique identifier (4.29 billion combinations per month)
+  const randomHex = crypto.randomBytes(4).toString('hex');
 
-  const slug = sanitizeFilenameSlug(originalName);
   const extension = MIME_TO_EXTENSION[detectedMime] || '.png';
-
-  const storedName = `${uniqueId}-${slug}${extension}`;
-  const path = `uploads/${year}/${month}/${storedName}`;
+  const shortId = `${shortYear}${month}-${randomHex}`; // "2610-a1b2c3d4"
+  const storedName = `${shortId}${extension}`; // "2610-a1b2c3d4.png"
+  const path = `uploads/${fullYear}/${month}/${storedName}`;
 
   return {
     storedName,
     path,
     extension,
+    shortId,
   };
+}
+
+/**
+ * Resolves a short or full route path into the canonical uploads/YYYY/MM/... storage path.
+ * Supports:
+ * - 2610-a1b2c3d4.png -> uploads/2026/10/2610-a1b2c3d4.png
+ * - 2026/10/filename.png -> uploads/2026/10/filename.png
+ */
+export function resolveShortImagePath(pathParam: string): string | null {
+  if (!pathParam || typeof pathParam !== 'string') return null;
+
+  const normalized = pathParam.replace(/\\/g, '/').replace(/^\/+/, '');
+
+  // 1. Check ultra-short format: YYMM-hash.ext (e.g. 2610-a1b2c3d4.jpg)
+  const shortMatch = normalized.match(/^(\d{2})(\d{2})-([a-fA-F0-9]{8})\.(png|jpg|jpeg|webp|gif)$/i);
+  if (shortMatch) {
+    const fullYear = `20${shortMatch[1]}`;
+    const month = shortMatch[2];
+    return `uploads/${fullYear}/${month}/${normalized}`;
+  }
+
+  // 2. Check full subpath under uploads (e.g. 2026/10/xyz.png)
+  if (normalized.startsWith('uploads/')) {
+    return isValidUploadPath(normalized) ? normalized : null;
+  }
+
+  const withUploads = `uploads/${normalized}`;
+  return isValidUploadPath(withUploads) ? withUploads : null;
 }
 
 /**

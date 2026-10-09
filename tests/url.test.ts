@@ -32,27 +32,45 @@ describe('URL Generator', () => {
     );
   });
 
-  it('constructs custom domain URL and trims slashes correctly', () => {
+  it('constructs ultra-short custom domain URL with /i/ prefix', () => {
     expect(
-      buildCustomDomainUrl('https://img.mojahidx.com', 'uploads/2026/10/img.png')
-    ).toBe('https://img.mojahidx.com/uploads/2026/10/img.png');
+      buildCustomDomainUrl(
+        'https://img.mojahidx.com',
+        'uploads/2026/10/2610-a1b2c3d4.jpg'
+      )
+    ).toBe('https://img.mojahidx.com/i/2610-a1b2c3d4.jpg');
 
-    // With trailing slash in base and leading slash in path
+    // With trailing slash in base
     expect(
-      buildCustomDomainUrl('https://img.mojahidx.com/', '/uploads/2026/10/img.png')
-    ).toBe('https://img.mojahidx.com/uploads/2026/10/img.png');
+      buildCustomDomainUrl(
+        'https://img.mojahidx.com/',
+        '/uploads/2026/10/2610-a1b2c3d4.png'
+      )
+    ).toBe('https://img.mojahidx.com/i/2610-a1b2c3d4.png');
+  });
+
+  it('constructs regular custom domain URL for legacy paths', () => {
+    expect(
+      buildCustomDomainUrl(
+        'https://img.mojahidx.com',
+        'uploads/2026/10/photo.png'
+      )
+    ).toBe('https://img.mojahidx.com/uploads/2026/10/photo.png');
 
     // When base URL is undefined or empty
     expect(buildCustomDomainUrl(undefined, 'uploads/2026/10/img.png')).toBeNull();
     expect(buildCustomDomainUrl('', 'uploads/2026/10/img.png')).toBeNull();
   });
 
-  it('constructs local app proxy URL', () => {
-    expect(buildAppProxyUrl('uploads/2026/10/img.png')).toBe(
-      '/uploads/2026/10/img.png'
+  it('constructs ultra-short app proxy URL', () => {
+    expect(buildAppProxyUrl('uploads/2026/10/2610-a1b2c3d4.jpg')).toBe(
+      '/i/2610-a1b2c3d4.jpg'
     );
-    expect(buildAppProxyUrl('/uploads/2026/10/img.png')).toBe(
-      '/uploads/2026/10/img.png'
+    expect(buildAppProxyUrl('/uploads/2026/10/2610-a1b2c3d4.jpg')).toBe(
+      '/i/2610-a1b2c3d4.jpg'
+    );
+    expect(buildAppProxyUrl('uploads/2026/10/custom.png')).toBe(
+      '/uploads/2026/10/custom.png'
     );
   });
 });
