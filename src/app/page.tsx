@@ -28,6 +28,9 @@ export default function HomePage() {
     return '';
   });
 
+  const [showPasswordModal, setShowPasswordModal] = useState<boolean>(false);
+  const [pendingUploadCallback, setPendingUploadCallback] = useState<((pwd: string) => void) | null>(null);
+
   useEffect(() => {
     // If not authenticated via local token, check server cookie session asynchronously
     if (!isAuthenticated) {
@@ -62,6 +65,21 @@ export default function HomePage() {
   const handleUnlock = (password: string) => {
     setAuthToken(password);
     setIsAuthenticated(true);
+    setShowPasswordModal(false);
+    if (pendingUploadCallback) {
+      pendingUploadCallback(password);
+      setPendingUploadCallback(null);
+    }
+  };
+
+  const handleRequestAuth = (callback: (pwd: string) => void) => {
+    setPendingUploadCallback(() => callback);
+    setShowPasswordModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowPasswordModal(false);
+    setPendingUploadCallback(null);
   };
 
   const handleLock = async () => {
@@ -70,6 +88,8 @@ export default function HomePage() {
     }
     setAuthToken('');
     setIsAuthenticated(false);
+    setShowPasswordModal(false);
+    setPendingUploadCallback(null);
     try {
       await fetch('/api/auth', { method: 'DELETE' });
     } catch {
@@ -79,10 +99,11 @@ export default function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-black text-zinc-100 font-sans selection:bg-white selection:text-black">
-      {/* Password Vault Modal */}
+      {/* Password Vault Modal (only shown when an upload is requested without active auth) */}
       <PasswordModal
-        isOpen={!isAuthenticated}
+        isOpen={showPasswordModal}
         onSuccess={handleUnlock}
+        onClose={handleCloseModal}
       />
 
       <Navbar
@@ -117,6 +138,8 @@ export default function HomePage() {
               <UnifiedUploader
                 maxFileSizeMB={status?.maxFileSizeMB || 100}
                 authToken={authToken}
+                isAuthenticated={isAuthenticated}
+                onRequestAuth={handleRequestAuth}
                 onUploadSuccess={(data) => setCurrentUpload(data)}
               />
             )}

@@ -1,14 +1,15 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Lock, Eye, EyeOff, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Lock, Eye, EyeOff, ShieldCheck, ArrowRight, X } from 'lucide-react';
 
 interface PasswordModalProps {
   isOpen: boolean;
   onSuccess: (password: string) => void;
+  onClose?: () => void;
 }
 
-export function PasswordModal({ isOpen, onSuccess }: PasswordModalProps) {
+export function PasswordModal({ isOpen, onSuccess, onClose }: PasswordModalProps) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,8 +56,26 @@ export function PasswordModal({ isOpen, onSuccess }: PasswordModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-      <div className="relative w-full max-w-md rounded-[32px] border border-zinc-800 bg-[#0a0a0c] p-6 sm:p-8 shadow-2xl shadow-black/90 text-zinc-100 animate-in fade-in zoom-in-95 duration-200">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && onClose) {
+          onClose();
+        }
+      }}
+    >
+      <div className="relative w-full max-w-md rounded-[32px] border border-zinc-800 bg-[#0a0a0c] p-6 sm:p-8 shadow-2xl shadow-black/90 text-zinc-100 animate-in zoom-in-95 duration-200">
+        {/* Close Button */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="absolute right-5 top-5 rounded-xl p-1.5 text-zinc-400 hover:bg-zinc-900 hover:text-white transition"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+
         {/* Header Icon */}
         <div className="flex items-center justify-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/80 shadow-inner">
@@ -67,10 +86,10 @@ export function PasswordModal({ isOpen, onSuccess }: PasswordModalProps) {
         {/* Title */}
         <div className="mt-5 text-center">
           <h3 className="text-xl sm:text-2xl font-bold tracking-tight text-white font-display">
-            MojahidX Private Vault
+            Personal Upload Access
           </h3>
           <p className="mt-1.5 text-xs sm:text-sm text-zinc-400">
-            This instance is password protected for personal use only.
+            Enter your password to upload files to your private host.
           </p>
         </div>
 
@@ -116,7 +135,7 @@ export function PasswordModal({ isOpen, onSuccess }: PasswordModalProps) {
               </span>
             ) : (
               <>
-                <span>Unlock Vault</span>
+                <span>Unlock &amp; Upload</span>
                 <ArrowRight className="h-4 w-4" />
               </>
             )}
@@ -126,7 +145,7 @@ export function PasswordModal({ isOpen, onSuccess }: PasswordModalProps) {
         {/* Security badge note */}
         <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-zinc-500">
           <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-          <span>Secure authentication with persistent session</span>
+          <span>Password is saved for this session</span>
         </div>
       </div>
     </div>

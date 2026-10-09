@@ -18,6 +18,8 @@ import { UploadApiResponse, UploadResultData, UploadCategory } from '@/lib/types
 interface UnifiedUploaderProps {
   maxFileSizeMB?: number;
   authToken?: string;
+  isAuthenticated?: boolean;
+  onRequestAuth?: (onSuccess: (password: string) => void) => void;
   onUploadSuccess: (data: UploadResultData) => void;
 }
 
@@ -27,6 +29,8 @@ const FORBIDDEN_EXTENSIONS = ['exe', 'bat', 'cmd', 'sh', 'php', 'phtml', 'cgi', 
 export function UnifiedUploader({
   maxFileSizeMB = 100,
   authToken = '',
+  isAuthenticated = false,
+  onRequestAuth,
   onUploadSuccess,
 }: UnifiedUploaderProps) {
   const [activeTab, setActiveTab] = useState<UploadCategory>('image');
@@ -129,8 +133,8 @@ export function UnifiedUploader({
     }
   };
 
-  const handleUpload = async () => {
-    if (!selectedFile || uploading) return;
+  const executeUpload = async (token: string) => {
+    if (!selectedFile) return;
 
     setUploading(true);
     setErrorMessage(null);
@@ -139,8 +143,6 @@ export function UnifiedUploader({
     const formData = new FormData();
     formData.append('file', selectedFile);
     formData.append('category', activeTab);
-
-    const token = authToken || localStorage.getItem('mojahidx_auth_token') || 'Mojahid@1234';
     formData.append('password', token);
 
     const progressTimer = setInterval(() => {
@@ -161,6 +163,15 @@ export function UnifiedUploader({
       const result: UploadApiResponse = await response.json();
 
       if (!response.ok || !result.success) {
+        if (response.status === 401) {
+          localStorage.removeItem('mojahidx_auth_token');
+          if (onRequestAuth) {
+            onRequestAuth((newToken) => executeUpload(newToken));
+            setUploading(false);
+            setUploadProgress(0);
+            return;
+          }
+        }
         const errorText = !result.success ? result.error : 'Upload failed.';
         setErrorMessage(errorText);
         setUploading(false);
@@ -182,6 +193,24 @@ export function UnifiedUploader({
       setUploading(false);
       setUploadProgress(0);
     }
+  };
+
+  const handleUpload = () => {
+    if (!selectedFile || uploading) return;
+
+    const savedToken =
+      authToken ||
+      (typeof window !== 'undefined' ? localStorage.getItem('mojahidx_auth_token') : null);
+
+    // If not authenticated, prompt for password now!
+    if (!isAuthenticated && !savedToken && onRequestAuth) {
+      onRequestAuth((verifiedPassword) => {
+        executeUpload(verifiedPassword);
+      });
+      return;
+    }
+
+    executeUpload(savedToken || authToken || '');
   };
 
   const formatFileSize = (bytes: number) => {
