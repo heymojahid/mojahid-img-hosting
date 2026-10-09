@@ -14,14 +14,14 @@ export function Navbar({ status, loadingStatus }: NavbarProps) {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-zinc-900 bg-black/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3 sm:px-6">
-        {/* Brand Logo: sanCDN */}
+        {/* Brand Logo: MojahidX */}
         <div className="flex items-center gap-2.5">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-black font-mono text-xs font-black tracking-tighter">
-            S
+            M
           </div>
           <div className="flex items-center gap-2">
             <span className="text-base font-bold tracking-tight text-white">
-              san<span className="text-zinc-400 font-light">CDN</span>
+              Mojahid<span className="text-zinc-400 font-light">X</span>
             </span>
           </div>
         </div>
