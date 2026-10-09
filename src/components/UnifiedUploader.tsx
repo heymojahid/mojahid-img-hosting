@@ -40,7 +40,7 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
-function uploadDirectToGitHub(
+async function uploadDirectToGitHub(
   uploadUrl: string,
   githubToken: string,
   branch: string,
@@ -48,66 +48,108 @@ function uploadDirectToGitHub(
   base64Content: string,
   onProgress: (percent: number) => void
 ): Promise<{ sha: string }> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('PUT', uploadUrl);
-    xhr.setRequestHeader('Authorization', `Bearer ${githubToken}`);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.setRequestHeader('Accept', 'application/vnd.github+json');
+  // Try XMLHttpRequest for real-time progress tracking
+  if (typeof XMLHttpRequest !== 'undefined') {
+    try {
+      return await new Promise<{ sha: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', uploadUrl);
+        xhr.setRequestHeader('Authorization', `Bearer ${githubToken}`);
+        xhr.setRequestHeader('Content-Type', 'application/json');
 
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable && event.total > 0) {
-        const percent = Math.min(99, Math.round((event.loaded / event.total) * 100));
-        onProgress(percent);
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable && event.total > 0) {
+            const percent = Math.min(99, Math.round((event.loaded / event.total) * 100));
+            onProgress(percent);
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            let sha = '';
+            try {
+              const resp = JSON.parse(xhr.responseText);
+              sha = resp.content?.sha || '';
+            } catch {
+              // ignore
+            }
+            onProgress(100);
+            resolve({ sha });
+          } else {
+            let errorMsg = '';
+            try {
+              const resp = JSON.parse(xhr.responseText);
+              errorMsg = resp.message || '';
+            } catch {
+              errorMsg = xhr.statusText;
+            }
+
+            if (xhr.status === 422 || xhr.status === 413) {
+              reject(new Error(`GitHub storage limit: ${errorMsg || 'File exceeds GitHub limit (max 100MB).'}`));
+            } else if (xhr.status === 401) {
+              reject(new Error(`GitHub token unauthorized (401): ${errorMsg || 'Unauthorized'}`));
+            } else {
+              reject(new Error(`GitHub upload failed (${xhr.status}): ${errorMsg || xhr.statusText}`));
+            }
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error('XHR_NETWORK_ERROR'));
+        };
+
+        xhr.ontimeout = () => {
+          reject(new Error('Upload timed out connecting to GitHub.'));
+        };
+
+        const payload = JSON.stringify({
+          message: `Upload ${filename} via MojahidX Image Hosting`,
+          content: base64Content,
+          branch,
+        });
+
+        xhr.send(payload);
+      });
+    } catch (xhrErr) {
+      if (xhrErr instanceof Error && xhrErr.message !== 'XHR_NETWORK_ERROR') {
+        throw xhrErr;
       }
-    };
+      // If XHR failed due to browser network quirk, fallback to native fetch below
+    }
+  }
 
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        let sha = '';
-        try {
-          const resp = JSON.parse(xhr.responseText);
-          sha = resp.content?.sha || '';
-        } catch {
-          // ignore
-        }
-        onProgress(100);
-        resolve({ sha });
-      } else {
-        let errorMsg = '';
-        try {
-          const resp = JSON.parse(xhr.responseText);
-          errorMsg = resp.message || '';
-        } catch {
-          errorMsg = xhr.statusText;
-        }
-
-        if (xhr.status === 422 || xhr.status === 413) {
-          reject(new Error(`GitHub storage limit: ${errorMsg || 'File exceeds GitHub limit (max 100MB).'}`));
-        } else if (xhr.status === 401) {
-          reject(new Error('GitHub token invalid or unauthorized to commit to repository.'));
-        } else {
-          reject(new Error(`GitHub upload failed (${xhr.status}): ${errorMsg || xhr.statusText}`));
-        }
-      }
-    };
-
-    xhr.onerror = () => {
-      reject(new Error('Network error connecting directly to GitHub.'));
-    };
-
-    xhr.ontimeout = () => {
-      reject(new Error('Upload timed out connecting to GitHub.'));
-    };
-
-    const payload = JSON.stringify({
+  // Fallback to native fetch
+  onProgress(50);
+  const response = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${githubToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
       message: `Upload ${filename} via MojahidX Image Hosting`,
       content: base64Content,
       branch,
-    });
-
-    xhr.send(payload);
+    }),
   });
+
+  if (!response.ok) {
+    let errorMsg = '';
+    try {
+      const data = await response.json();
+      errorMsg = data.message || '';
+    } catch {
+      errorMsg = response.statusText;
+    }
+    if (response.status === 401) {
+      throw new Error(`GitHub token unauthorized (401): ${errorMsg || 'Unauthorized'}`);
+    }
+    throw new Error(`GitHub upload failed (${response.status}): ${errorMsg || response.statusText}`);
+  }
+
+  const data = await response.json().catch(() => ({}));
+  onProgress(100);
+  return { sha: data.content?.sha || '' };
 }
 
 export function UnifiedUploader({
