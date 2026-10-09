@@ -1,7 +1,6 @@
-// MojahidX PWA Service Worker
-const CACHE_NAME = 'mojahidx-cache-v1';
+// MojahidX PWA Service Worker (v4 - Network-First for Navigation)
+const CACHE_NAME = 'mojahidx-cache-v4';
 const PRECACHE_ASSETS = [
-  '/',
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
@@ -11,23 +10,36 @@ const PRECACHE_ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_ASSETS);
-    }).then(() => self.skipWaiting())
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => cache.addAll(PRECACHE_ASSETS))
+      .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((name) => {
-          if (name !== CACHE_NAME) {
-            return caches.delete(name);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
+    caches
+      .keys()
+      .then((cacheNames) =>
+        Promise.all(
+          cacheNames.map((name) => {
+            if (name !== CACHE_NAME) {
+              console.log('[SW] Purging outdated cache:', name);
+              return caches.delete(name);
+            }
+          })
+        )
+      )
+      .then(() => self.clients.claim())
+      .then(() => {
+        // Notify open clients that SW updated
+        return self.clients.matchAll({ type: 'window' }).then((clients) => {
+          clients.forEach((client) => {
+            client.postMessage({ type: 'SW_UPDATED' });
+          });
+        });
+      })
   );
 });
 
@@ -37,42 +49,44 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // Skip API requests and image proxy from SW caching to always have freshest data
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/i/') || url.pathname.startsWith('/uploads/')) {
+  // Always bypass API calls and image routes
+  if (
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/i/') ||
+    url.pathname.startsWith('/uploads/')
+  ) {
     return;
   }
 
+  // Network-First for HTML navigation requests to ensure fresh JS bundles are always loaded
+  if (event.request.mode === 'navigate' || url.pathname === '/') {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const clone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Stale-while-revalidate for static assets (icons, fonts, images)
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Return cache but update in background (stale-while-revalidate for static assets)
-        fetch(event.request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              caches.open(CACHE_NAME).then((cache) => {
-                cache.put(event.request, networkResponse);
-              });
-            }
-          })
-          .catch(() => {});
-        return cachedResponse;
-      }
-
-      return fetch(event.request).then((networkResponse) => {
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+      const fetchPromise = fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse));
+          }
           return networkResponse;
-        }
-        const responseToCache = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
-        return networkResponse;
-      }).catch(() => {
-        // Fallback for document navigation
-        if (event.request.mode === 'navigate') {
-          return caches.match('/');
-        }
-      });
+        })
+        .catch(() => null);
+
+      return cachedResponse || fetchPromise;
     })
   );
 });
