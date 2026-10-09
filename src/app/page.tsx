@@ -94,20 +94,20 @@ export default function HomePage() {
         onOpenSetupGuide={() => setSetupModalOpen(true)}
       />
 
-      <main className="relative z-10 flex-1 px-4 py-8 sm:px-6 lg:py-12">
+      <main className="relative z-10 flex-1 px-3.5 py-6 sm:px-6 sm:py-10 lg:py-12">
         <div className="mx-auto max-w-4xl">
           {/* Storage Alert (when not configured yet) */}
           {!loadingStatus && status && !status.configured && (
-            <div className="mb-8 flex flex-col items-start justify-between gap-4 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-950/40 via-purple-950/30 to-amber-950/20 p-5 backdrop-blur-md sm:flex-row sm:items-center">
-              <div className="flex items-start gap-3.5">
-                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/40">
+            <div className="mb-6 sm:mb-8 flex flex-col items-start justify-between gap-3 sm:gap-4 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-950/40 via-purple-950/30 to-amber-950/20 p-4 sm:p-5 backdrop-blur-md sm:flex-row sm:items-center">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/40">
                   <AlertTriangle className="h-4 w-4" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-amber-200">
-                    Image Storage Repository Not Connected
+                  <h4 className="text-xs sm:text-sm font-bold text-amber-200">
+                    Storage Repository Not Connected
                   </h4>
-                  <p className="mt-0.5 text-xs text-zinc-300">
+                  <p className="mt-0.5 text-[11px] sm:text-xs text-zinc-300">
                     Configure your <code className="font-mono text-amber-300">GITHUB_TOKEN</code> and{' '}
                     <code className="font-mono text-amber-300">GITHUB_OWNER</code> in environment variables to enable uploads.
                   </p>
@@ -116,33 +116,32 @@ export default function HomePage() {
 
               <button
                 onClick={() => setSetupModalOpen(true)}
-                className="flex items-center gap-1.5 whitespace-nowrap rounded-xl bg-amber-500/20 px-4 py-2 text-xs font-bold text-amber-300 ring-1 ring-amber-500/40 transition hover:bg-amber-500 hover:text-black"
+                className="w-full sm:w-auto justify-center flex items-center gap-1.5 whitespace-nowrap rounded-xl bg-amber-500/20 px-3.5 py-2 text-xs font-bold text-amber-300 ring-1 ring-amber-500/40 transition hover:bg-amber-500 hover:text-black"
               >
-                <span>View Setup Steps</span>
+                <span>Setup Guide</span>
                 <ArrowRight className="h-3.5 w-3.5" />
               </button>
             </div>
           )}
 
           {/* Hero Section */}
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 rounded-full border border-purple-800/40 bg-purple-950/40 px-3.5 py-1 text-xs font-semibold text-purple-300 backdrop-blur-sm">
-              <Sparkles className="h-3.5 w-3.5 text-purple-400" />
-              <span>Production-Grade Image Host</span>
+          <div className="text-center mb-6 sm:mb-10 px-1">
+            <div className="inline-flex items-center gap-2 rounded-full border border-purple-800/40 bg-purple-950/40 px-3 py-1 text-[11px] sm:text-xs font-semibold text-purple-300 backdrop-blur-sm">
+              <Sparkles className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+              <span>MojahidX Image Hosting</span>
               <span className="text-purple-600">&bull;</span>
-              <span className="text-zinc-400">Next.js &amp; GitHub REST API</span>
+              <span className="text-zinc-400">Edge CDN</span>
             </div>
 
-            <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-white sm:text-4xl md:text-5xl">
-              Host Images Directly on{' '}
+            <h1 className="mt-3 sm:mt-4 text-2xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-white leading-tight">
+              Host Images on{' '}
               <span className="bg-gradient-to-r from-purple-400 via-indigo-300 to-purple-500 bg-clip-text text-transparent">
-                GitHub &amp; Edge CDN
+                Edge CDN
               </span>
             </h1>
 
-            <p className="mx-auto mt-3 max-w-2xl text-sm text-zinc-400 leading-relaxed sm:text-base">
-              Secure, server-side uploads to your dedicated repository. Get permanent direct URLs,
-              instant Markdown embeds, and HTML tags with 1-year immutable edge caching.
+            <p className="mx-auto mt-2 sm:mt-3 max-w-2xl text-xs sm:text-sm text-zinc-400 leading-relaxed">
+              Fast, secure image hosting with instant Markdown, HTML, and ultra-short shareable links.
             </p>
           </div>
 

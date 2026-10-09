@@ -5,8 +5,8 @@ import { ShieldCheck, Zap, Lock, Database } from 'lucide-react';
 
 export function Footer() {
   return (
-    <footer className="mt-20 border-t border-purple-900/30 bg-[#090714] py-12 text-xs text-zinc-500">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+    <footer className="mt-12 sm:mt-20 border-t border-purple-900/30 bg-[#090714] py-8 sm:py-12 text-xs text-zinc-500">
+      <div className="mx-auto max-w-7xl px-3.5 sm:px-6">
         {/* Features row */}
         <div className="mb-10 grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-4">
           <div className="flex items-start gap-3 rounded-xl border border-purple-900/20 bg-[#0c091a]/60 p-4">

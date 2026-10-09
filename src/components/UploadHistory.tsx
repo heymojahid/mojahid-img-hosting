@@ -44,11 +44,11 @@ export function UploadHistory({ history, onClearHistory, onSelectImage }: Upload
   };
 
   return (
-    <div className="mt-12 w-full rounded-2xl border border-purple-900/30 bg-[#100d22]/80 p-6 backdrop-blur-md">
-      <div className="flex items-center justify-between border-b border-purple-900/30 pb-4">
+    <div className="mt-8 sm:mt-12 w-full rounded-2xl border border-purple-900/30 bg-[#100d22]/80 p-4 sm:p-6 backdrop-blur-md">
+      <div className="flex items-center justify-between border-b border-purple-900/30 pb-3.5 sm:pb-4">
         <div className="flex items-center gap-2">
-          <History className="h-5 w-5 text-purple-400" />
-          <h3 className="text-base font-bold text-white">Recent Uploads (Session)</h3>
+          <History className="h-4 w-4 sm:h-5 sm:w-5 text-purple-400" />
+          <h3 className="text-sm sm:text-base font-bold text-white">Recent Uploads</h3>
           <span className="rounded-full bg-purple-900/40 px-2 py-0.5 text-xs font-mono text-purple-300">
             {history.length}
           </span>
@@ -56,10 +56,10 @@ export function UploadHistory({ history, onClearHistory, onSelectImage }: Upload
 
         <button
           onClick={onClearHistory}
-          className="flex items-center gap-1.5 rounded-lg border border-purple-950 px-2.5 py-1 text-xs font-medium text-zinc-400 transition hover:border-rose-900/50 hover:bg-rose-950/30 hover:text-rose-300"
+          className="flex items-center gap-1.5 rounded-lg border border-purple-950 px-2.5 py-1 text-[11px] sm:text-xs font-medium text-zinc-400 transition hover:border-rose-900/50 hover:bg-rose-950/30 hover:text-rose-300 active:scale-95"
         >
           <Trash2 className="h-3.5 w-3.5" />
-          <span>Clear History</span>
+          <span>Clear</span>
         </button>
       </div>
 
