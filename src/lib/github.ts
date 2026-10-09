@@ -11,7 +11,9 @@ export function getStorageConfig(): StorageConfig {
   const repo = process.env.GITHUB_REPO?.trim() || 'mojahidx-image-hosting';
   const branch = process.env.GITHUB_BRANCH?.trim() || 'main';
   const token = process.env.GITHUB_TOKEN?.trim();
-  const publicImageBaseUrl = process.env.PUBLIC_IMAGE_BASE_URL?.trim();
+  const publicImageBaseUrl =
+    process.env.PUBLIC_IMAGE_BASE_URL?.trim() ||
+    process.env.CUSTOM_IMAGE_BASE_URL?.trim();
 
   const maxFileSizeBytes = process.env.MAX_FILE_SIZE_BYTES
     ? parseInt(process.env.MAX_FILE_SIZE_BYTES, 10)
