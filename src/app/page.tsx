@@ -31,22 +31,24 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="flex min-h-screen flex-col bg-black text-zinc-100 font-sans">
+    <div className="flex min-h-screen flex-col bg-black text-zinc-100 font-sans selection:bg-white selection:text-black">
       <Navbar status={status} loadingStatus={loadingStatus} />
 
-      <main className="flex-1 flex flex-col items-center justify-center px-4 py-10 sm:py-16">
-        <div className="w-full max-w-xl mx-auto">
-          {/* Minimal Headline */}
-          <div className="text-center mb-8">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-              Instant Image Host
-            </h1>
-            <p className="mt-1.5 text-xs sm:text-sm text-zinc-400">
-              Upload an image to get an ultra-short CDN link.
-            </p>
-          </div>
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-8 sm:py-16">
+        <div className={`w-full ${currentUpload ? 'max-w-2xl' : 'max-w-xl'} mx-auto transition-all duration-300`}>
+          {/* Minimal Headline (Only shown during upload state) */}
+          {!currentUpload && (
+            <div className="text-center mb-8">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white font-display">
+                Instant Image Host
+              </h1>
+              <p className="mt-1.5 text-xs sm:text-sm text-zinc-400">
+                Upload an image to get an ultra-short CDN link.
+              </p>
+            </div>
+          )}
 
-          {/* Upload or Single Short-URL Result */}
+          {/* Upload or Reference-styled Result Card */}
           <div className="w-full">
             {currentUpload ? (
               <UploadResultCard
