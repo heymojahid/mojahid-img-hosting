@@ -99,6 +99,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // 3. Parse JSON body
     let body: {
       filename?: string;
+      customName?: string;
       size?: number;
       type?: string;
       category?: UploadCategory;
@@ -190,12 +191,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       body.type ||
       'application/octet-stream';
 
-    // 5. Generate unique short path under uploads/YYYY/MM/
+    // 5. Generate unique short path under uploads/YYYY/MM/ (with optional custom file slug)
+    const customName = body.customName?.trim();
     const { storedName, path: uploadPath } = generateUploadPath(
       filename,
       detectedMime,
       new Date(),
-      dotExt
+      dotExt,
+      customName
     );
 
     // 6. Generate presigned PUT URL

@@ -95,6 +95,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const chunkIndexStr = formData.get('chunkIndex')?.toString();
     const totalChunksStr = formData.get('totalChunks')?.toString();
     const filename = formData.get('filename')?.toString()?.trim();
+    const customName = formData.get('customName')?.toString()?.trim();
     const rawCategory = formData.get('category')?.toString()?.toLowerCase();
     const category: UploadCategory = rawCategory === 'file' ? 'file' : 'image';
     const chunkFile = formData.get('chunk');
@@ -265,12 +266,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       }
     }
 
-    // Generate unique short path under uploads/YYYY/MM/
+    // Generate unique short path under uploads/YYYY/MM/ (with optional custom file slug)
     const { storedName, path: uploadPath } = generateUploadPath(
       filename,
       detectedMime,
       new Date(),
-      dotExt
+      dotExt,
+      customName
     );
 
     let sha: string;

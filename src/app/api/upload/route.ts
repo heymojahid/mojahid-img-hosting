@@ -121,6 +121,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<UploadApiResp
 
     const rawCategory = formData.get('category')?.toString()?.toLowerCase();
     const category: UploadCategory = rawCategory === 'file' ? 'file' : 'image';
+    const customName = formData.get('customName')?.toString()?.trim();
 
     // 5. Extract buffer
     const arrayBuffer = await file.arrayBuffer();
@@ -169,12 +170,13 @@ export async function POST(req: NextRequest): Promise<NextResponse<UploadApiResp
       detectedMime = imgValidation.detectedMimeType;
     }
 
-    // 6. Generate unique safe path under uploads/YYYY/MM/
+    // 6. Generate unique safe path under uploads/YYYY/MM/ (with optional custom file slug)
     const { storedName, path } = generateUploadPath(
       file.name,
       detectedMime,
       new Date(),
-      fileExtension
+      fileExtension,
+      customName
     );
 
     // 7. Choose storage provider (Cloudflare R2 for big files, APKs, EXEs; GitHub for images)

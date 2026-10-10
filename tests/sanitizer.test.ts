@@ -34,12 +34,45 @@ describe('Filename and Path Sanitizer', () => {
     expect(result.storedName.startsWith('2605-')).toBe(true);
   });
 
+  it('generates custom filename paths when custom slug is provided', () => {
+    const fixedDate = new Date('2026-10-15T12:00:00Z');
+    const result = generateUploadPath(
+      'original-installer.exe',
+      'application/x-msdownload',
+      fixedDate,
+      '.exe',
+      'My Super App 2.0'
+    );
+
+    expect(result.path).toBe('uploads/2026/10/2610-my-super-app-20.exe');
+    expect(result.storedName).toBe('2610-my-super-app-20.exe');
+    expect(result.shortId).toBe('2610-my-super-app-20');
+    expect(result.extension).toBe('.exe');
+  });
+
+  it('safely handles custom filenames that include user-typed extensions', () => {
+    const fixedDate = new Date('2026-10-15T12:00:00Z');
+    const result = generateUploadPath(
+      'freefire.apk',
+      'application/vnd.android.package-archive',
+      fixedDate,
+      '.apk',
+      'mod-menu-v3.apk'
+    );
+
+    expect(result.path).toBe('uploads/2026/10/2610-mod-menu-v3.apk');
+    expect(result.storedName).toBe('2610-mod-menu-v3.apk');
+  });
+
   it('resolves ultra-short and subpath URLs to canonical storage paths', () => {
     expect(resolveShortImagePath('2610-a1b2c3d4.png')).toBe(
       'uploads/2026/10/2610-a1b2c3d4.png'
     );
     expect(resolveShortImagePath('2512-99887766.webp')).toBe(
       'uploads/2025/12/2512-99887766.webp'
+    );
+    expect(resolveShortImagePath('2610-my-custom-app.apk')).toBe(
+      'uploads/2026/10/2610-my-custom-app.apk'
     );
     expect(resolveShortImagePath('2026/10/custom-name.jpg')).toBe(
       'uploads/2026/10/custom-name.jpg'

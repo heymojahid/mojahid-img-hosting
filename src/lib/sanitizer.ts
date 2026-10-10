@@ -37,7 +37,8 @@ export function generateUploadPath(
   originalName: string,
   detectedMime: string,
   date: Date = new Date(),
-  customExtension?: string
+  customExtension?: string,
+  customFilename?: string
 ): {
   storedName: string;
   path: string;
@@ -48,9 +49,6 @@ export function generateUploadPath(
   const shortYear = fullYear.slice(-2); // "26"
   const month = (date.getUTCMonth() + 1).toString().padStart(2, '0'); // "10"
 
-  // 8-character random hexadecimal unique identifier (4.29 billion combinations per month)
-  const randomHex = crypto.randomBytes(4).toString('hex');
-
   let extension = '.png';
   if (customExtension) {
     extension = customExtension.startsWith('.') ? customExtension : `.${customExtension}`;
@@ -58,8 +56,37 @@ export function generateUploadPath(
     extension = MIME_TO_EXTENSION[detectedMime as AllowedMimeType];
   }
 
-  const shortId = `${shortYear}${month}-${randomHex}`; // "2610-a1b2c3d4"
-  const storedName = `${shortId}${extension}`; // "2610-a1b2c3d4.ext"
+  // If user specified custom filename, sanitize it into a safe slug
+  let identifier: string;
+  if (customFilename && customFilename.trim()) {
+    const raw = customFilename.trim();
+    let nameWithoutExt = raw;
+
+    if (extension && raw.toLowerCase().endsWith(extension.toLowerCase())) {
+      nameWithoutExt = raw.slice(0, -extension.length);
+    } else {
+      const extMatch = raw.match(/\.([a-zA-Z]{2,6})$/);
+      if (extMatch) {
+        nameWithoutExt = raw.slice(0, -extMatch[0].length);
+      }
+    }
+
+    const clean = nameWithoutExt
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 50);
+
+    identifier = clean.length > 0 ? clean : crypto.randomBytes(4).toString('hex');
+  } else {
+    identifier = crypto.randomBytes(4).toString('hex');
+  }
+
+  const shortId = `${shortYear}${month}-${identifier}`; // e.g. "2610-a1b2c3d4" or "2610-my-app"
+  const storedName = `${shortId}${extension}`;
   const path = `uploads/${fullYear}/${month}/${storedName}`;
 
   return {
@@ -70,13 +97,13 @@ export function generateUploadPath(
   };
 }
 
-const ALLOWED_EXT_PATTERN = 'png|jpg|jpeg|webp|gif|exe|msi|apk|aab|pdf|plp|zip|rar|7z|tar|gz|doc|docx|xls|xlsx|ppt|pptx|txt|json|csv|mp4|mp3';
+const ALLOWED_EXT_PATTERN = 'png|jpg|jpeg|webp|gif|exe|msi|apk|aab|pdf|plp|zip|rar|7z|tar|gz|iso|dmg|pkg|deb|rpm|doc|docx|xls|xlsx|ppt|pptx|txt|json|csv|mp4|mp3';
 
 /**
  * Resolves a short or full route path into the canonical uploads/YYYY/MM/... storage path.
  * Supports:
  * - 2610-a1b2c3d4.png -> uploads/2026/10/2610-a1b2c3d4.png
- * - 2610-a1b2c3d4.apk -> uploads/2026/10/2610-a1b2c3d4.apk
+ * - 2610-my-app.apk -> uploads/2026/10/2610-my-app.apk
  * - 2026/10/filename.ext -> uploads/2026/10/filename.ext
  */
 export function resolveShortImagePath(pathParam: string): string | null {
@@ -84,8 +111,8 @@ export function resolveShortImagePath(pathParam: string): string | null {
 
   const normalized = pathParam.replace(/\\/g, '/').replace(/^\/+/, '');
 
-  // 1. Check ultra-short format: YYMM-hash.ext (e.g. 2610-a1b2c3d4.jpg or .apk)
-  const shortRegex = new RegExp(`^(\\d{2})(\\d{2})-([a-fA-F0-9]{8})\\.(${ALLOWED_EXT_PATTERN})$`, 'i');
+  // 1. Check ultra-short format: YYMM-slug.ext (e.g. 2610-a1b2c3d4.jpg or 2610-my-custom-app.apk)
+  const shortRegex = new RegExp(`^(\\d{2})(\\d{2})-([a-zA-Z0-9_\\-]+)\\.(${ALLOWED_EXT_PATTERN})$`, 'i');
   const shortMatch = normalized.match(shortRegex);
   if (shortMatch) {
     const fullYear = `20${shortMatch[1]}`;

@@ -13,6 +13,7 @@ import {
   Palette,
   Monitor,
   File,
+  Tag,
 } from 'lucide-react';
 import { UploadResultData, UploadCategory } from '@/lib/types';
 
@@ -33,6 +34,7 @@ async function uploadFileViaPresignedR2(
   file: File,
   category: 'image' | 'file',
   passwordToken: string,
+  customName: string,
   onProgress: (percent: number) => void
 ): Promise<UploadResultData> {
   const presignRes = await fetch('/api/upload/presign', {
@@ -47,6 +49,7 @@ async function uploadFileViaPresignedR2(
       type: file.type,
       category,
       password: passwordToken,
+      customName: customName.trim() || undefined,
     }),
   });
 
@@ -114,6 +117,7 @@ async function uploadFileInChunks(
   file: File,
   category: 'image' | 'file',
   passwordToken: string,
+  customName: string,
   onProgress: (percent: number) => void
 ): Promise<UploadResultData> {
   const CHUNK_SIZE = 3 * 1024 * 1024; // 3.0 MB chunk size (strictly below Vercel 4.5MB limit)
@@ -139,6 +143,9 @@ async function uploadFileInChunks(
     formData.append('filename', file.name);
     formData.append('category', category);
     formData.append('password', passwordToken);
+    if (customName && customName.trim()) {
+      formData.append('customName', customName.trim());
+    }
     formData.append('chunk', chunkBlob, `chunk_${i}.bin`);
 
     const response = await fetch('/api/upload/chunk', {
@@ -207,6 +214,7 @@ export function UnifiedUploader({
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [customFilename, setCustomFilename] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -218,6 +226,7 @@ export function UnifiedUploader({
     setPreviewUrl(null);
     setImageDimensions(null);
     setErrorMessage(null);
+    setCustomFilename('');
     setUploadProgress(0);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -317,6 +326,7 @@ export function UnifiedUploader({
             selectedFile,
             activeTab,
             token,
+            customFilename,
             (progress) => setUploadProgress(progress)
           );
         } catch (r2Err) {
@@ -328,6 +338,7 @@ export function UnifiedUploader({
             selectedFile,
             activeTab,
             token,
+            customFilename,
             (progress) => setUploadProgress(progress)
           );
         }
@@ -336,6 +347,7 @@ export function UnifiedUploader({
           selectedFile,
           activeTab,
           token,
+          customFilename,
           (progress) => setUploadProgress(progress)
         );
       }
@@ -397,6 +409,24 @@ export function UnifiedUploader({
     if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return <FileArchive className="h-6 w-6 text-amber-400" />;
     return <File className="h-6 w-6 text-zinc-300" />;
   };
+
+  const selectedExt = selectedFile
+    ? selectedFile.name.includes('.')
+      ? `.${selectedFile.name.split('.').pop()}`
+      : ''
+    : '';
+
+  const previewSlug = customFilename.trim()
+    ? customFilename
+        .trim()
+        .toLowerCase()
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[^\w\s-]/g, '')
+        .replace(/[\s_]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 50)
+    : '';
 
   return (
     <div className="w-full">
@@ -570,6 +600,46 @@ export function UnifiedUploader({
                     <X className="h-4 w-4" />
                   </button>
                 )}
+              </div>
+
+              {/* Optional Custom File Name Input */}
+              <div className="mt-3.5 pt-3.5 border-t border-zinc-800/80">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label
+                    htmlFor="custom-filename-input"
+                    className="flex items-center gap-1.5 text-xs font-medium text-zinc-300"
+                  >
+                    <Tag className="h-3.5 w-3.5 text-zinc-400" />
+                    <span>Custom File Name</span>
+                    <span className="text-[10px] text-zinc-500 font-normal">(Optional)</span>
+                  </label>
+                  {previewSlug ? (
+                    <span className="text-[11px] font-mono text-zinc-400">
+                      Slug preview: <span className="text-emerald-400 font-semibold">{previewSlug}{selectedExt}</span>
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="relative flex items-center rounded-xl border border-zinc-800 bg-[#0c0c10] px-3 py-2 transition-all focus-within:border-zinc-500 focus-within:ring-1 focus-within:ring-zinc-500">
+                  <input
+                    id="custom-filename-input"
+                    type="text"
+                    disabled={uploading}
+                    value={customFilename}
+                    onChange={(e) => setCustomFilename(e.target.value)}
+                    placeholder={activeTab === 'image' ? 'e.g. hero-banner-2026' : 'e.g. my-awesome-app'}
+                    maxLength={50}
+                    className="w-full bg-transparent text-xs text-white placeholder-zinc-600 focus:outline-none font-mono disabled:opacity-50"
+                  />
+                  {selectedExt && (
+                    <span className="shrink-0 select-none text-xs font-mono font-medium text-zinc-400 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded-md ml-2">
+                      {selectedExt}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-[10px] text-zinc-500">
+                  Letters, numbers, and hyphens only. Leave blank for an auto-generated ID.
+                </p>
               </div>
 
               {/* Progress bar */}
