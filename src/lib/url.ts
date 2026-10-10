@@ -40,6 +40,12 @@ export function buildCustomDomainUrl(
   // Strip leading slashes from file path
   const cleanPath = filePath.replace(/^\/+/, '');
 
+  // R2 public bucket endpoints (pub-xxx.r2.dev or r2.cloudflarestorage.com)
+  // do not have /i/ URL rewriting; they serve the exact S3 object key (uploads/YYYY/MM/...)
+  if (cleanBase.includes('.r2.dev') || cleanBase.includes('.r2.cloudflarestorage.com')) {
+    return `${cleanBase}/${cleanPath}`;
+  }
+
   // If ultra-short format (uploads/YYYY/MM/YYMM-hash.ext), compress to /i/YYMM-hash.ext
   const shortMatch = cleanPath.match(
     /^uploads\/\d{4}\/\d{2}\/(\d{4}-[a-fA-F0-9]{8}\.[a-zA-Z0-9]+)$/i

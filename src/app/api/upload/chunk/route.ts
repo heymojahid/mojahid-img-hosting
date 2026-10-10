@@ -9,6 +9,8 @@ import { buildAppProxyUrl, buildCustomDomainUrl, buildRawGitHubUrl } from '@/lib
 import { validateGeneralFile, validateImageFile } from '@/lib/validator';
 import { UploadCategory } from '@/lib/types';
 import { APP_DEFAULT_PASSWORD, EXTENSION_TO_MIME } from '@/lib/constants';
+import { getR2Config, uploadToR2, buildR2DirectUrl } from '@/lib/r2';
+import { chooseStorageProvider, getSystemStorageStatus } from '@/lib/storage';
 
 function getClientIp(req: NextRequest): string {
   const forwardedFor = req.headers.get('x-forwarded-for');
@@ -65,13 +67,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     // 2. Validate storage configuration
-    let config;
-    try {
-      config = getStorageConfig();
-    } catch (configErr) {
-      const message = configErr instanceof Error ? configErr.message : 'Server storage misconfiguration';
+    const storageStatus = getSystemStorageStatus();
+    if (!storageStatus.configured) {
       return NextResponse.json(
-        { success: false, error: message, code: 'CONFIG_ERROR' },
+        { success: false, error: 'No storage provider configured. Please configure Cloudflare R2 or GitHub credentials.', code: 'CONFIG_ERROR' },
         { status: 500 }
       );
     }
@@ -221,14 +220,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     await fs.promises.unlink(tempFilePath).catch(() => {});
     tempFilePath = null;
 
-    // Validate size (max 35MB supported by GitHub API)
-    const maxSizeBytes = 35 * 1024 * 1024;
+    // Choose storage provider (Cloudflare R2 for big files, APKs, EXEs; GitHub for images)
+    const provider = chooseStorageProvider(category, ext, fullBuffer.length);
+    const maxSizeBytes = provider === 'r2'
+      ? (storageStatus.r2MaxFileSizeMB || 500) * 1024 * 1024
+      : 35 * 1024 * 1024; // 35 MB limit for GitHub
+
     if (fullBuffer.length > maxSizeBytes) {
       const sizeMB = (fullBuffer.length / (1024 * 1024)).toFixed(1);
+      const limitMB = Math.round(maxSizeBytes / (1024 * 1024));
       return NextResponse.json(
         {
           success: false,
-          error: `File size (${sizeMB} MB) exceeds maximum supported limit of 35 MB.`,
+          error: `File size (${sizeMB} MB) exceeds maximum supported limit of ${limitMB} MB for ${provider === 'r2' ? 'Cloudflare R2' : 'GitHub'}.`,
           code: 'FILE_TOO_LARGE',
         },
         { status: 400 }
@@ -269,22 +273,40 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       dotExt
     );
 
-    // Commit server-to-server to GitHub
-    const githubResult = await uploadToGitHub(
-      config,
-      uploadPath,
-      u8,
-      filename
-    );
+    let sha: string;
+    let directUrl: string;
+    let customDomainUrl: string | null;
 
-    // Build URLs
-    const directUrl = buildRawGitHubUrl(
-      config.owner,
-      config.repo,
-      config.branch,
-      uploadPath
-    );
-    const customDomainUrl = buildCustomDomainUrl(config.publicImageBaseUrl, uploadPath);
+    if (provider === 'r2') {
+      const r2Config = getR2Config();
+      const r2Result = await uploadToR2(r2Config, uploadPath, u8, detectedMime);
+      sha = r2Result.etag || `r2-${storedName.replace(/[^a-zA-Z0-9]/g, '')}`;
+      directUrl = buildR2DirectUrl(r2Config, uploadPath);
+      const appDomain =
+        process.env.PUBLIC_IMAGE_BASE_URL?.trim() ||
+        process.env.CUSTOM_IMAGE_BASE_URL?.trim();
+      customDomainUrl =
+        appDomain && !appDomain.includes('.r2.dev')
+          ? buildCustomDomainUrl(appDomain, uploadPath)
+          : null;
+    } else {
+      const config = getStorageConfig();
+      const githubResult = await uploadToGitHub(
+        config,
+        uploadPath,
+        u8,
+        filename
+      );
+      sha = githubResult.sha;
+      directUrl = buildRawGitHubUrl(
+        config.owner,
+        config.repo,
+        config.branch,
+        uploadPath
+      );
+      customDomainUrl = buildCustomDomainUrl(config.publicImageBaseUrl, uploadPath);
+    }
+
     const proxyUrl = buildAppProxyUrl(uploadPath);
 
     return NextResponse.json(
@@ -297,12 +319,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           path: uploadPath,
           size: fullBuffer.length,
           mimeType: detectedMime,
-          sha: githubResult.sha,
+          sha,
           directUrl,
           customDomainUrl,
           proxyUrl,
           uploadedAt: new Date().toISOString(),
           category,
+          provider,
         },
       },
       { status: 201 }

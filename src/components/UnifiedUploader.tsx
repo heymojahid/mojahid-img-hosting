@@ -18,6 +18,8 @@ import { UploadResultData, UploadCategory } from '@/lib/types';
 
 interface UnifiedUploaderProps {
   maxFileSizeMB?: number;
+  r2MaxFileSizeMB?: number;
+  r2Configured?: boolean;
   authToken?: string;
   isAuthenticated?: boolean;
   onRequestAuth?: (onSuccess: (password: string) => void) => void;
@@ -26,6 +28,87 @@ interface UnifiedUploaderProps {
 
 const ALLOWED_IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const FORBIDDEN_EXTENSIONS = ['bat', 'cmd', 'sh', 'php', 'phtml', 'cgi', 'pl', 'vbs', 'com', 'scr'];
+
+async function uploadFileViaPresignedR2(
+  file: File,
+  category: 'image' | 'file',
+  passwordToken: string,
+  onProgress: (percent: number) => void
+): Promise<UploadResultData> {
+  const presignRes = await fetch('/api/upload/presign', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-app-password': passwordToken,
+    },
+    body: JSON.stringify({
+      filename: file.name,
+      size: file.size,
+      type: file.type,
+      category,
+      password: passwordToken,
+    }),
+  });
+
+  let presignData: {
+    success: boolean;
+    uploadUrl?: string;
+    file?: UploadResultData;
+    error?: string;
+  };
+
+  try {
+    const text = await presignRes.text();
+    presignData = JSON.parse(text);
+  } catch {
+    throw new Error(`Server returned HTTP ${presignRes.status}: ${presignRes.statusText}`);
+  }
+
+  if (!presignRes.ok || !presignData.success || !presignData.uploadUrl || !presignData.file) {
+    if (presignRes.status === 401) {
+      throw new Error('UNAUTHORIZED_PASSWORD');
+    }
+    throw new Error(presignData.error || 'Failed to initialize Cloudflare R2 upload.');
+  }
+
+  const { uploadUrl, file: fileResult } = presignData;
+
+  onProgress(10);
+
+  // Direct PUT to Cloudflare R2 via XMLHttpRequest with exact upload progress
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', uploadUrl);
+    xhr.setRequestHeader(
+      'Content-Type',
+      fileResult.mimeType || file.type || 'application/octet-stream'
+    );
+
+    xhr.upload.onprogress = (evt) => {
+      if (evt.lengthComputable && evt.total > 0) {
+        const percent = Math.min(98, 10 + Math.round((evt.loaded / evt.total) * 88));
+        onProgress(percent);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress(100);
+        resolve();
+      } else {
+        reject(new Error(`Cloudflare R2 returned HTTP ${xhr.status}: ${xhr.statusText}`));
+      }
+    };
+
+    xhr.onerror = () => {
+      reject(new Error('Direct upload to Cloudflare R2 failed due to network or CORS.'));
+    };
+
+    xhr.send(file);
+  });
+
+  return fileResult;
+}
 
 async function uploadFileInChunks(
   file: File,
@@ -109,6 +192,8 @@ async function uploadFileInChunks(
 
 export function UnifiedUploader({
   maxFileSizeMB = 100,
+  r2MaxFileSizeMB = 500,
+  r2Configured = false,
   authToken = '',
   isAuthenticated = false,
   onRequestAuth,
@@ -148,10 +233,11 @@ export function UnifiedUploader({
   const handleFile = (file: File) => {
     setErrorMessage(null);
 
-    const maxSizeBytes = maxFileSizeMB * 1024 * 1024;
+    const effectiveLimitMB = activeTab === 'file' && r2Configured ? r2MaxFileSizeMB : maxFileSizeMB;
+    const maxSizeBytes = effectiveLimitMB * 1024 * 1024;
     if (file.size > maxSizeBytes) {
       const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-      setErrorMessage(`File size (${sizeMB} MB) exceeds ${maxFileSizeMB} MB limit.`);
+      setErrorMessage(`File size (${sizeMB} MB) exceeds ${effectiveLimitMB} MB limit.`);
       return;
     }
 
@@ -222,12 +308,37 @@ export function UnifiedUploader({
     setUploadProgress(5);
 
     try {
-      const fileData = await uploadFileInChunks(
-        selectedFile,
-        activeTab,
-        token,
-        (progress) => setUploadProgress(progress)
-      );
+      let fileData: UploadResultData;
+      const isBigOrFile = activeTab === 'file' || selectedFile.size > 25 * 1024 * 1024;
+
+      if (r2Configured && isBigOrFile) {
+        try {
+          fileData = await uploadFileViaPresignedR2(
+            selectedFile,
+            activeTab,
+            token,
+            (progress) => setUploadProgress(progress)
+          );
+        } catch (r2Err) {
+          if (r2Err instanceof Error && r2Err.message === 'UNAUTHORIZED_PASSWORD') {
+            throw r2Err;
+          }
+          console.warn('Direct R2 upload failed, falling back to chunked upload:', r2Err);
+          fileData = await uploadFileInChunks(
+            selectedFile,
+            activeTab,
+            token,
+            (progress) => setUploadProgress(progress)
+          );
+        }
+      } else {
+        fileData = await uploadFileInChunks(
+          selectedFile,
+          activeTab,
+          token,
+          (progress) => setUploadProgress(progress)
+        );
+      }
 
       setUploadProgress(100);
 
@@ -316,8 +427,12 @@ export function UnifiedUploader({
           >
             <FileArchive className="w-4 h-4" />
             <span>File Upload</span>
-            <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              100MB
+            <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full border ${
+              r2Configured
+                ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+            }`}>
+              {r2Configured ? `${r2MaxFileSizeMB}MB` : `${maxFileSizeMB}MB`}
             </span>
           </button>
         </div>
@@ -379,11 +494,17 @@ export function UnifiedUploader({
           ) : (
             <div className="mt-2 flex flex-col items-center gap-2">
               <p className="text-xs sm:text-sm text-zinc-400">
-                Supports EXE, MSI, APK, AAB, PDF, PLP, ZIP, RAR &bull; Max {maxFileSizeMB} MB
+                Supports APK, EXE, MSI, AAB, ZIP, RAR, ISO, PDF &bull; Max{' '}
+                {r2Configured ? r2MaxFileSizeMB : maxFileSizeMB} MB
+                {r2Configured && (
+                  <span className="ml-1.5 text-orange-400 font-medium">
+                    (Cloudflare R2)
+                  </span>
+                )}
               </p>
               {/* Pill tags */}
               <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
-                {['.EXE', '.MSI', '.APK', '.AAB', '.PDF', '.PLP', '.ZIP', '.RAR'].map((ext) => (
+                {['.APK', '.EXE', '.MSI', '.AAB', '.ZIP', '.RAR', '.ISO', '.PDF', '.PLP'].map((ext) => (
                   <span
                     key={ext}
                     className="px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-400"

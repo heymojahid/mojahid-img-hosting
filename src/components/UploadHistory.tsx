@@ -314,6 +314,11 @@ export function UploadHistory({
                       <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-mono font-semibold bg-zinc-900 border border-zinc-800 text-zinc-400">
                         {ext}
                       </span>
+                      {item.provider === 'r2' && (
+                        <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-mono font-semibold bg-orange-500/10 border border-orange-500/20 text-orange-400">
+                          R2
+                        </span>
+                      )}
                     </div>
 
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-zinc-400 font-mono">

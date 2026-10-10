@@ -33,8 +33,24 @@ function formatBytes(bytes: number) {
 export function UploadResultCard({ data, onReset }: UploadResultCardProps) {
   const [copied, setCopied] = useState(false);
 
-  // The ultra-short URL (or fallback)
-  const ultraShortUrl = data.customDomainUrl || data.proxyUrl || data.directUrl;
+  // Compute the best reliable URL
+  const ultraShortUrl = React.useMemo(() => {
+    const isLocalhost =
+      typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1');
+
+    // For Cloudflare R2 files: directUrl points directly to the CDN bucket
+    if (data.provider === 'r2' && data.directUrl) {
+      return data.directUrl;
+    }
+
+    if (isLocalhost && data.proxyUrl) {
+      return `${window.location.origin}${data.proxyUrl}`;
+    }
+
+    return data.customDomainUrl || data.directUrl || data.proxyUrl;
+  }, [data]);
 
   const copyToClipboard = async () => {
     try {
@@ -133,8 +149,14 @@ export function UploadResultCard({ data, onReset }: UploadResultCardProps) {
       <div className="relative w-full rounded-[20px] sm:rounded-2xl border border-zinc-800/80 bg-[#020203] overflow-hidden p-4 sm:p-8 flex flex-col items-center justify-center min-h-[260px] sm:min-h-[360px] group">
         {/* Floating Top-Left Badge */}
         <div className="absolute top-3 sm:top-4 left-3 sm:left-4 z-10 flex items-center gap-2 rounded-lg border border-zinc-800/90 bg-black/80 backdrop-blur-md px-2.5 py-1 text-[11px] font-mono text-zinc-300 select-none">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]" />
-          <span>LIVE CDN</span>
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${
+              data.provider === 'r2'
+                ? 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.9)]'
+                : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]'
+            }`}
+          />
+          <span>{data.provider === 'r2' ? 'CLOUDFLARE R2' : 'LIVE CDN'}</span>
         </div>
 
         {/* Floating Top-Right Format & Size Badge */}
@@ -185,7 +207,9 @@ export function UploadResultCard({ data, onReset }: UploadResultCardProps) {
           {data.name || 'File Uploaded'}
         </h2>
         <p className="mt-2 text-xs sm:text-base text-zinc-400 leading-relaxed font-sans max-w-xl">
-          {isImage
+          {data.provider === 'r2'
+            ? 'Your file is permanently hosted on Cloudflare R2 with zero egress fees and ultra-fast global delivery.'
+            : isImage
             ? 'Your image is permanently hosted with an instant ultra-short CDN link and cached globally.'
             : 'Your file is permanently hosted with an instant ultra-short download link and high-speed delivery.'}
         </p>

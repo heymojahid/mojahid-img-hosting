@@ -1,8 +1,10 @@
 import { AllowedMimeType } from './types';
 
-// Default max file size: 100 MB as requested
+// Default max file size: 100 MB for GitHub, 500 MB for Cloudflare R2
 export const DEFAULT_MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
 export const DEFAULT_MAX_FILE_SIZE_MB = 100;
+export const DEFAULT_R2_MAX_FILE_SIZE_MB = 500; // 500 MB default for R2 (configurable)
+export const DEFAULT_R2_MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024;
 
 // Default personal vault password
 export const APP_DEFAULT_PASSWORD = 'Mojahid@1234';
@@ -21,7 +23,7 @@ export const MIME_TO_EXTENSION: Record<AllowedMimeType, string> = {
   'image/gif': '.gif',
 };
 
-// Supported file extensions for files upload (EXE, MSI, APK, AAB, PDF, PLP, ZIP, etc.)
+// Supported file extensions for files upload (EXE, MSI, APK, AAB, PDF, PLP, ZIP, ISO, etc.)
 export const ALLOWED_FILE_EXTENSIONS: readonly string[] = [
   'exe',
   'msi',
@@ -34,6 +36,11 @@ export const ALLOWED_FILE_EXTENSIONS: readonly string[] = [
   '7z',
   'tar',
   'gz',
+  'iso',
+  'dmg',
+  'pkg',
+  'deb',
+  'rpm',
   'doc',
   'docx',
   'xls',
@@ -64,6 +71,11 @@ export const EXTENSION_TO_MIME: Record<string, string> = {
   '.7z': 'application/x-7z-compressed',
   '.tar': 'application/x-tar',
   '.gz': 'application/gzip',
+  '.iso': 'application/x-iso9660-image',
+  '.dmg': 'application/x-apple-diskimage',
+  '.pkg': 'application/octet-stream',
+  '.deb': 'application/vnd.debian.binary-package',
+  '.rpm': 'application/x-redhat-package-manager',
   '.doc': 'application/msword',
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.xls': 'application/vnd.ms-excel',

@@ -168,7 +168,7 @@ export default function HomePage() {
                 Instant Host &amp; Cloud Storage
               </h1>
               <p className="mt-1.5 text-xs sm:text-sm text-zinc-400">
-                Upload images or files up to 100MB to get an ultra-short CDN link.
+                Upload images or files up to {status?.r2Configured ? `${status.r2MaxFileSizeMB || 500}MB` : `${status?.maxFileSizeMB || 100}MB`} to get an ultra-short CDN link.
               </p>
             </div>
           )}
@@ -183,6 +183,8 @@ export default function HomePage() {
             ) : (
               <UnifiedUploader
                 maxFileSizeMB={status?.maxFileSizeMB || 100}
+                r2MaxFileSizeMB={status?.r2MaxFileSizeMB || 500}
+                r2Configured={status?.r2Configured || false}
                 authToken={authToken}
                 isAuthenticated={isAuthenticated}
                 onRequestAuth={handleRequestAuth}

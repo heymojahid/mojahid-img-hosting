@@ -44,13 +44,27 @@ export function Navbar({
             <span className="h-2 w-2 rounded-full bg-zinc-700 animate-pulse" />
           ) : isConfigured ? (
             <div className="flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-[11px] text-zinc-300">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-              <span className="font-mono">ready</span>
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  status?.r2Configured && status?.githubConfigured
+                    ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]'
+                    : status?.r2Configured
+                    ? 'bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.8)]'
+                    : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]'
+                }`}
+              />
+              <span className="font-mono">
+                {status?.activeProvider === 'hybrid'
+                  ? 'GH + R2 ready'
+                  : status?.r2Configured
+                  ? 'R2 ready'
+                  : 'ready'}
+              </span>
             </div>
           ) : (
             <div className="flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-[11px] text-amber-400">
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-              <span>setup token</span>
+              <span>setup storage</span>
             </div>
           )}
 

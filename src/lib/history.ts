@@ -1,4 +1,4 @@
-import { UploadResultData, UploadCategory } from './types';
+import { UploadResultData, UploadCategory, StorageProvider } from './types';
 
 export interface UploadHistoryItem {
   id: string;
@@ -9,6 +9,7 @@ export interface UploadHistoryItem {
   url: string;
   uploadedAt: string;
   category: UploadCategory;
+  provider?: StorageProvider;
 }
 
 export const STORAGE_HISTORY_KEY = 'mojahidx_upload_history';
@@ -69,6 +70,7 @@ export function addUploadToHistory(data: UploadResultData): UploadHistoryItem[] 
     url,
     uploadedAt: data.uploadedAt || new Date().toISOString(),
     category,
+    provider: data.provider,
   };
 
   // Remove existing entry with identical storedName or url to prevent duplicates

@@ -6,6 +6,9 @@ import { buildAppProxyUrl, buildCustomDomainUrl, buildRawGitHubUrl } from '@/lib
 import { validateGeneralFile, validateImageFile } from '@/lib/validator';
 import { UploadApiResponse, UploadCategory } from '@/lib/types';
 import { APP_DEFAULT_PASSWORD } from '@/lib/constants';
+import { getR2Config, uploadToR2, buildR2DirectUrl } from '@/lib/r2';
+import { chooseStorageProvider, getSystemStorageStatus } from '@/lib/storage';
+
 
 function getClientIp(req: NextRequest): string {
   const forwardedFor = req.headers.get('x-forwarded-for');
@@ -63,16 +66,13 @@ export async function POST(req: NextRequest): Promise<NextResponse<UploadApiResp
       );
     }
 
-    // 2. Validate server configuration
-    let config;
-    try {
-      config = getStorageConfig();
-    } catch (configErr) {
-      const message = configErr instanceof Error ? configErr.message : 'Server storage misconfiguration';
+    // 2. Validate storage configuration
+    const storageStatus = getSystemStorageStatus();
+    if (!storageStatus.configured) {
       return NextResponse.json(
         {
           success: false,
-          error: message,
+          error: 'No storage provider configured. Please configure Cloudflare R2 or GitHub credentials.',
           code: 'CONFIG_ERROR',
         },
         { status: 500 }
@@ -129,8 +129,10 @@ export async function POST(req: NextRequest): Promise<NextResponse<UploadApiResp
     let detectedMime = 'application/octet-stream';
     let fileExtension: string | undefined;
 
-    // Up to 100 MB limit
-    const maxSizeBytes = 100 * 1024 * 1024;
+    // Up to 500 MB limit for R2, 100 MB default
+    const maxSizeBytes = storageStatus.r2Configured
+      ? (storageStatus.r2MaxFileSizeMB || 500) * 1024 * 1024
+      : (storageStatus.maxFileSizeMB || 100) * 1024 * 1024;
 
     if (category === 'file') {
       const generalValidation = validateGeneralFile(
@@ -175,25 +177,45 @@ export async function POST(req: NextRequest): Promise<NextResponse<UploadApiResp
       fileExtension
     );
 
-    // 7. Upload directly to GitHub REST Contents API
-    const githubResult = await uploadToGitHub(
-      config,
-      path,
-      buffer,
-      file.name
-    );
+    // 7. Choose storage provider (Cloudflare R2 for big files, APKs, EXEs; GitHub for images)
+    const provider = chooseStorageProvider(category, fileExtension || '', buffer.length);
+    let directUrl: string;
+    let customDomainUrl: string | null;
+    let sha: string;
 
-    // 8. Formulate URLs
-    const directUrl = buildRawGitHubUrl(
-      config.owner,
-      config.repo,
-      config.branch,
-      path
-    );
-    const customDomainUrl = buildCustomDomainUrl(config.publicImageBaseUrl, path);
+    if (provider === 'r2') {
+      const r2Config = getR2Config();
+      const r2Result = await uploadToR2(r2Config, path, buffer, detectedMime);
+      sha = r2Result.etag || `r2-${storedName.replace(/[^a-zA-Z0-9]/g, '')}`;
+      directUrl = buildR2DirectUrl(r2Config, path);
+      const appDomain =
+        process.env.PUBLIC_IMAGE_BASE_URL?.trim() ||
+        process.env.CUSTOM_IMAGE_BASE_URL?.trim();
+      customDomainUrl =
+        appDomain && !appDomain.includes('.r2.dev')
+          ? buildCustomDomainUrl(appDomain, path)
+          : null;
+    } else {
+      const ghConfig = getStorageConfig();
+      const githubResult = await uploadToGitHub(
+        ghConfig,
+        path,
+        buffer,
+        file.name
+      );
+      sha = githubResult.sha;
+      directUrl = buildRawGitHubUrl(
+        ghConfig.owner,
+        ghConfig.repo,
+        ghConfig.branch,
+        path
+      );
+      customDomainUrl = buildCustomDomainUrl(ghConfig.publicImageBaseUrl, path);
+    }
+
     const proxyUrl = buildAppProxyUrl(path);
 
-    // 9. Return response
+    // 8. Return response
     return NextResponse.json(
       {
         success: true,
@@ -203,12 +225,13 @@ export async function POST(req: NextRequest): Promise<NextResponse<UploadApiResp
           path,
           size: buffer.length,
           mimeType: detectedMime,
-          sha: githubResult.sha,
+          sha,
           directUrl,
           customDomainUrl,
           proxyUrl,
           uploadedAt: new Date().toISOString(),
           category,
+          provider,
         },
       },
       {

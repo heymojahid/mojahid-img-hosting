@@ -122,6 +122,8 @@ Copy `.env.example` to `.env.local` for local development:
 cp .env.example .env.local
 ```
 
+### GitHub Storage (Images & Default Files)
+
 | Variable | Required | Default | Description |
 | :--- | :---: | :---: | :--- |
 | `GITHUB_OWNER` | **Yes** | — | Your GitHub username or organization (e.g. `heymojahid`). |
@@ -129,9 +131,42 @@ cp .env.example .env.local
 | `GITHUB_BRANCH` | No | `main` | Target git branch. |
 | `GITHUB_TOKEN` | **Yes** | — | Fine-grained PAT with `Contents: Read and write`. |
 | `PUBLIC_IMAGE_BASE_URL` | No | *(raw GitHub URL)* | Custom domain base URL (e.g. `https://img.mojahidx.com`). |
-| `MAX_FILE_SIZE_MB` | No | `5` | Maximum upload size per image in MB. |
-| `RATE_LIMIT_MAX_REQUESTS` | No | `25` | Maximum upload requests allowed per IP window. |
+| `APP_PASSWORD` | No | `Mojahid@1234` | Personal vault access password. |
+| `MAX_FILE_SIZE_MB` | No | `100` | Maximum upload size per image in MB. |
+| `RATE_LIMIT_MAX_REQUESTS` | No | `50` | Maximum upload requests allowed per IP window. |
 | `RATE_LIMIT_WINDOW_SECONDS` | No | `600` | Sliding rate limit window duration in seconds (10 min). |
+
+### Cloudflare R2 (Recommended for Big Files: APK, EXE, MSI, ZIP, ISO)
+
+When configured, files uploaded under the **File Upload** tab or large binaries (APKs, EXEs, etc.) are automatically routed to Cloudflare R2 with zero egress fees and high-speed direct upload!
+
+| Variable | Required | Default | Description |
+| :--- | :---: | :---: | :--- |
+| `R2_ACCOUNT_ID` | **Yes** *(for R2)* | — | Cloudflare Account ID (found in Cloudflare R2 overview). |
+| `R2_ACCESS_KEY_ID` | **Yes** *(for R2)* | — | R2 API Token Access Key ID. |
+| `R2_SECRET_ACCESS_KEY` | **Yes** *(for R2)* | — | R2 API Token Secret Access Key. |
+| `R2_BUCKET_NAME` | **Yes** *(for R2)* | — | R2 Bucket Name (e.g. `mojahid-files`). |
+| `R2_PUBLIC_URL` | No | — | Custom domain or `pub-xxx.r2.dev` public bucket URL. |
+| `R2_MAX_FILE_SIZE_MB` | No | `500` | Max file upload size in MB for Cloudflare R2. |
+
+#### Cloudflare R2 Setup (Step-by-Step)
+1. **Create Bucket:** In [Cloudflare Dashboard](https://dash.cloudflare.com/) → **R2 Object Storage** → **Create bucket** (e.g. `mojahid-files`).
+2. **Create API Token:** Click **Manage R2 API Tokens** → **Create API token** with **Object Read & Write** permissions scoped to your bucket.
+3. **CORS Policy (For High-Speed Direct Browser Uploads):**
+   Go to your Bucket → **Settings** → **CORS Policy** → Add:
+   ```json
+   [
+     {
+       "AllowedOrigins": ["*"],
+       "AllowedMethods": ["GET", "PUT", "HEAD"],
+       "AllowedHeaders": ["*"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+4. **Public Access / Custom Domain (Optional):**
+   In Bucket → **Settings** → **Public Access**, enable `r2.dev` public URL or connect your own domain (e.g. `files.mojahidx.com`).
+
 
 ---
 
